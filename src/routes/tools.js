@@ -551,29 +551,32 @@ router.post(
     const lastSegment = booking.segments[booking.segments.length - 1];
     const connecting = booking.segments.length > 1;
 
-    const [transit, disruption, entry, position, weather] = await Promise.allSettled([
-      ctx.scrape(EMIRATES_UPDATES).then((s) => ({
-        parsed: advisory.parseTransitRules(s.data, booking.origin_city, booking.final_destination_city),
-        source: s.source,
-      })),
-      ctx.scrape(EMIRATES_UPDATES).then((s) => ({
-        parsed: advisory.parseDisruption(s.data, booking.final_destination_city),
-        source: s.source,
-      })),
-      ctx.scrape(EMIRATES_UPDATES).then((s) => ({
-        parsed: advisory.parseEntryRequirements(s.data, booking.final_destination_city),
-        source: s.source,
-      })),
+    // One scrape, three questions. The advisory answers transit, destination
+    // disruption and entry paperwork all at once, so fetching it per-question
+    // would spend three credits and three rate-limit units on identical bytes.
+    const [advisoryPage, position, weather] = await Promise.allSettled([
+      ctx.scrape(EMIRATES_UPDATES),
       adsb.positionFor(lastSegment.flight_no),
       ctx.fetchText(METAR_URL('OMDB')),
     ]);
 
     const val = (r) => (r.status === 'fulfilled' ? r.value : null);
-    const t = val(transit);
-    const d = val(disruption);
-    const e = val(entry);
+    const page = val(advisoryPage);
     const p = val(position);
     const w = val(weather);
+
+    const t = page && {
+      parsed: advisory.parseTransitRules(page.data, booking.origin_city, booking.final_destination_city),
+      source: page.source,
+    };
+    const d = page && {
+      parsed: advisory.parseDisruption(page.data, booking.final_destination_city),
+      source: page.source,
+    };
+    const e = page && {
+      parsed: advisory.parseEntryRequirements(page.data, booking.final_destination_city),
+      source: page.source,
+    };
 
     const checks = [
       t && { check: 'transit_rules', ok: t.parsed.transit_allowed, detail: t.parsed.explanation, source: t.source },

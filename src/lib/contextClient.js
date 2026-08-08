@@ -50,7 +50,27 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = TIMEOUT_MS) {
  * @param {{ includeSelectors?: string[], useMainContentOnly?: boolean, maxAgeMs?: number }} [opts]
  * @returns {Promise<{ data: string|null, source: 'live'|'cache'|'none', cached_at?: string, error?: string }>}
  */
+/**
+ * In-flight scrapes, keyed by url+options.
+ *
+ * journey_brief asks three different questions of the same advisory page and
+ * fires them in parallel, which without this issues three identical HTTP
+ * requests: three credits, and three units against a rate limit that is 10 per
+ * minute on the free tier. Coalescing collapses them to one. This is not a
+ * micro-optimisation — a burst of tool calls was already returning 429s and
+ * degrading tools that had perfectly good answers available.
+ */
+const inFlight = new Map();
+
 async function scrape(url, opts = {}) {
+  const dedupeKey = `${url}|${JSON.stringify(opts)}`;
+  if (inFlight.has(dedupeKey)) return inFlight.get(dedupeKey);
+  const promise = scrapeUncoalesced(url, opts).finally(() => inFlight.delete(dedupeKey));
+  inFlight.set(dedupeKey, promise);
+  return promise;
+}
+
+async function scrapeUncoalesced(url, opts = {}) {
   const key = apiKey();
   if (!key) return fromCache(url, 'no CONTEXT_DEV_API_KEY configured');
 
