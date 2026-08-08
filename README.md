@@ -477,7 +477,7 @@ Everything built, in the order it was earned. Each row is verifiable in the comm
 | 14 | Two-layer guardrails, adversarially verified | Native platform guardrails (focus, injection, content, two custom rules) *plus* prompt rules. `medical_and_legal_information` deliberately off — visa rules **are** legal information |
 | 15 | ~330 EK flight numbers → route + typical fleet | Route knowledge is stable public fact; today's schedule is a Cirium contract. Labelled `route_map`, and a test pins that no gate or delay is ever fabricated |
 | 16 | Backend guardrails | Log redaction (Luhn-checked so ticket numbers survive) and injection defanging on scraped prose. Writing that test found a window bug that could flip *blocked* → *allowed* |
-| 17 | Arabic + Hindi | Language presets, native first messages, Arabic ASR keywords, and the honesty hedges translated so "I could not verify" survives the language switch |
+| 17 | Arabic, Hindi, Chinese, French | Language presets, native first messages, Arabic ASR keywords, and the honesty hedges translated so "I could not verify" survives the language switch |
 | 18 | Emirates-themed web/mobile UI + QR | `/talk` and `/qr`, EN/AR with true RTL, logo lockup, and an explicit "independent prototype, not affiliated" line |
 | 19 | ElevenLabs to the fullest | ASR keyword boosting, eager turns, tool-call sounds, end_call, language detection, post-call evaluation criteria + data collection |
 

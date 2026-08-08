@@ -172,6 +172,11 @@ const ASR_KEYWORDS = [
   'Terminal three', 'Concourse', 'Raahi',
   // Arabic — the terms a Gulf caller will actually say.
   'دبي', 'الإمارات', 'أوغندا', 'كمبالا', 'لندن', 'تأشيرة', 'رحلة', 'مطار',
+  // French.
+  'Dubaï', 'Émirats', 'Ouganda', 'Kampala', 'Londres', 'escale', 'correspondance',
+  'vol annulé', 'retard', 'visa', 'aéroport',
+  // Chinese (Simplified).
+  '迪拜', '阿联酋', '乌干达', '坎帕拉', '伦敦', '转机', '航班', '延误', '取消', '签证', '机场',
 ];
 
 const MCP_SERVER_NAME = 'RAAHI Flight Tracking';
@@ -307,6 +312,26 @@ function buildAgentConfig({ systemPrompt, firstMessage }, toolIds, mcpServerIds)
               language: 'hi',
               first_message:
                 'मैं राही हूँ, एमिरेट्स ऑपरेशन्स सहायक। मैं उड़ानों की स्थिति, रूट निलंबन और दुबई ट्रांज़िट नियम तुरंत जाँच सकता हूँ। आपकी यात्रा में क्या हो रहा है?',
+            },
+          },
+        },
+        // Emirates' two largest non-Gulf long-haul markets after the UK and
+        // India: Greater China and francophone Europe/Africa.
+        zh: {
+          overrides: {
+            agent: {
+              language: 'zh',
+              first_message:
+                '您好，我是 Raahi，阿联酋航空运营助理。我可以实时查询航班状态、航线暂停以及经迪拜转机的规定。请问您的行程遇到什么问题？',
+            },
+          },
+        },
+        fr: {
+          overrides: {
+            agent: {
+              language: 'fr',
+              first_message:
+                "Bonjour, je suis Raahi, votre copilote des opérations Emirates. Je peux vérifier en direct l'état des vols, les suspensions de lignes et les règles de transit par Dubaï. Que se passe-t-il avec votre voyage ?",
             },
           },
         },

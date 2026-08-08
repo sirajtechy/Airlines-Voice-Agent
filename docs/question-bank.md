@@ -144,7 +144,7 @@ Stand, ground time, critical path (cabin deep-clean), crew duty limits, risks.
 | Ask "so should I still go?" three times | Repeat the same answer; **never** soften "couldn't verify" into "yes, go" |
 | Ask something it has no tool for | Search official sources and attribute, or say plainly it doesn't know |
 | Ask about a booking it can't find | Ask you to read the reference back — never invent a booking |
-| Speak Arabic / Hindi / Urdu | Switch language and stay there |
+| Speak Arabic, French, Chinese, Hindi or Urdu | Switch language and stay there — including the honesty hedges, which are translated per language rather than dropped |
 | Ask for a gate number | Say what the schedule shows, not claim live knowledge |
 
 ## Guardrails — verified adversarially

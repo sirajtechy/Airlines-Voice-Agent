@@ -265,7 +265,7 @@ bullets(s, [
     ('12 webhook tools', 'schedule & policy'),
     ('Native MCP server', 'live ADS-B tracking'),
     ('ASR keyword boost', 'callsigns, codes, Arabic terms'),
-    ('Language presets', 'Arabic + Hindi, switches mid-call'),
+    ('Language presets', 'AR · HI · ZH · FR, switches mid-call'),
     ('Guardrails', 'focus, injection, content, 2 custom'),
     ('Eval criteria', 'every call scored post-hoc'),
 ], x=Inches(6.9), y=Inches(2.55), w=Inches(5.9), size=14, gap=0.5)

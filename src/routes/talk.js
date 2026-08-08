@@ -101,7 +101,7 @@ const THEME = `
 
   main { flex: 1; width: 100%; max-width: 620px; margin: 0 auto; padding: 22px 18px 30px; }
 
-  .lang { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; }
+  .lang { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
   .lang button {
     background: var(--surface); color: var(--ink-soft); border: 1px solid var(--line);
     padding: 8px 20px; border-radius: 2px; font-size: 0.88rem; cursor: pointer;
@@ -175,13 +175,23 @@ const THEME = `
   elevenlabs-convai { display: block; }
 `;
 
+const LANGS = [
+  ['en', 'English'],
+  ['ar', 'العربية'],
+  ['fr', 'Français'],
+  ['zh', '中文'],
+];
+
 const TOGGLE_SCRIPT = `
+  var LANGS = ${JSON.stringify(LANGS.map((l) => l[0]))};
   function setLang(l) {
     document.querySelectorAll('[data-lang]').forEach(function (el) {
       el.style.display = el.getAttribute('data-lang') === l ? '' : 'none';
     });
-    document.getElementById('btn-en').classList.toggle('on', l === 'en');
-    document.getElementById('btn-ar').classList.toggle('on', l === 'ar');
+    LANGS.forEach(function (code) {
+      var b = document.getElementById('btn-' + code);
+      if (b) b.classList.toggle('on', code === l);
+    });
   }
   setLang('en');
 `;
@@ -259,7 +269,7 @@ const EN_CONTENT = `
 
   <div class="talk-cue">
     <strong>Tap the microphone and just talk</strong>
-    <span>English, العربية or हिन्दी — Raahi follows your language.</span>
+    <span>English, العربية, Français, 中文 or हिन्दी — Raahi follows your language.</span>
   </div>`;
 
 const AR_CONTENT = `
@@ -313,6 +323,103 @@ const AR_CONTENT = `
     <span>بالعربية أو الإنجليزية — راحي يتبع لغتك.</span>
   </div>`;
 
+const FR_CONTENT = `
+  <div class="card" lang="fr">
+    <h2>Demandez à Raahi</h2><div class="hr"></div>
+    <details open><summary>« Ma référence de réservation est K7X2M9 — dois-je partir pour l'aéroport ? »</summary>
+      <p>Une seule référence déclenche cinq vérifications en direct simultanées — règles de
+      transit, perturbations à destination, formalités d'entrée, position réelle de l'avion et
+      météo à Dubaï — et revient avec une décision en deux secondes environ.</p></details>
+    <details><summary>« Puis-je faire escale à Dubaï entre Kampala et Londres ? »</summary>
+      <p>Les restrictions dépendent souvent des pays où vous <i>avez séjourné</i>, pas de votre
+      destination. Raahi vérifie les deux extrémités du voyage dans l'avis Emirates en direct.</p></details>
+    <details><summary>« Que me faut-il pour entrer au Royaume-Uni ? Et pour le Nigeria ? »</summary>
+      <p>Pour l'UE et le Royaume-Uni, l'avis en direct plus gov.uk et europa.eu. Ailleurs, Raahi
+      ne consulte que des sources officielles — et vous dit d'où vient la réponse.</p></details>
+    <details><summary>« Quelque chose a-t-il changé dans la dernière heure ? »</summary>
+      <p>Un moniteur relit l'avis toutes les quinze minutes et transmet les changements à Raahi.
+      « Rien n'a changé » est une vraie réponse, tout comme « cela a changé il y a onze minutes ».</p></details>
+    <details><summary>« Où est le vol EK 305 en ce moment ? »</summary>
+      <p>Données transpondeur en direct — altitude, vitesse, montée ou descente — et le nombre
+      d'appareils en vol autour de l'aéroport.</p></details>
+    <details><summary>« Mon vol a cinq heures de retard — à quoi ai-je droit ? »</summary>
+      <p>Indemnisation, réacheminement, hôtel, bagages retardés — et à quel comptoir vous adresser.</p></details>
+  </div>
+
+  <div class="card brain" lang="fr">
+    <h2>L'intelligence derrière Raahi</h2>
+    <ul class="why">
+      <li><b>Lit en direct la page qui change.</b> L'avis de voyage Emirates, au moment où vous posez la question.</li>
+      <li><b>Comprend la prose, pas les mots-clés.</b> Une restriction liée à votre origine, une
+        exemption de vingt-et-un jours cachée dans une subordonnée.</li>
+      <li><b>Sait quand le monde a changé.</b> Détection sémantique des changements en quinze minutes.</li>
+      <li><b>Voit de vrais avions.</b> Données ADS-B en direct, dites simplement.</li>
+      <li><b>Ne bluffe jamais.</b> Chaque réponse porte sa source ; ce qu'il n'a pu vérifier, il le dit.</li>
+    </ul>
+  </div>
+
+  <div class="card" lang="fr">
+    <h2>Références de démonstration</h2><div class="hr"></div>
+    <div class="pnr-row">
+      <div class="pnr"><code>K7X2M9</code><span>Kampala → Londres</span></div>
+      <div class="pnr"><code>P3L8QK</code><span>Mumbai → Londres</span></div>
+      <div class="pnr"><code>T4B9RD</code><span>Dubaï → Beyrouth</span></div>
+    </div>
+    <p class="note">Réservations fictives — tout ce que Raahi vérifie à leur sujet est en direct.</p>
+  </div>
+
+  <div class="talk-cue" lang="fr">
+    <strong>Touchez le micro et parlez</strong>
+    <span>En français — Raahi suit votre langue.</span>
+  </div>`;
+
+const ZH_CONTENT = `
+  <div class="card" lang="zh">
+    <h2>问问 Raahi</h2><div class="hr"></div>
+    <details open><summary>“我的订座编号是 K7X2M9——我该出发去机场吗？”</summary>
+      <p>一个订座编号同时触发五项实时查询：中转规定、目的地中断情况、入境手续、飞机的实际位置，
+      以及迪拜天气，约两秒内返回一个明确结论。</p></details>
+    <details><summary>“我能从坎帕拉经迪拜转机到伦敦吗？”</summary>
+      <p>限制往往取决于您<i>去过</i>哪里，而不是您要去哪里。Raahi 会在实时的阿联酋航空公告中
+      同时核查行程两端。</p></details>
+    <details><summary>“进入英国需要什么？尼日利亚呢？”</summary>
+      <p>欧盟与英国的手续来自实时公告，以及 gov.uk 和 europa.eu。其他目的地，Raahi 只检索官方来源，
+      并会告诉您答案的出处。</p></details>
+    <details><summary>“过去一小时内有变化吗？”</summary>
+      <p>监控系统每十五分钟重读公告，并把变化推送给 Raahi。“没有变化”是真实的答复，
+      “十一分钟前发生了变化”也是。</p></details>
+    <details><summary>“EK 305 现在在哪里？”</summary>
+      <p>实时应答机数据——高度、速度、爬升或下降——以及机场周边正在飞行的航班数量。</p></details>
+    <details><summary>“我的航班延误五小时——我能获得什么？”</summary>
+      <p>赔偿、改签、酒店、行李延误——以及该前往哪个柜台。</p></details>
+  </div>
+
+  <div class="card brain" lang="zh">
+    <h2>Raahi 背后的能力</h2>
+    <ul class="why">
+      <li><b>实时读取会变化的页面。</b>在您提问的那一刻抓取阿联酋航空旅行公告。</li>
+      <li><b>理解文句，而非关键词。</b>以出发地为准的限制，藏在从句里的二十一天豁免。</li>
+      <li><b>知道世界何时改变。</b>语义变更检测在十五分钟内送达。</li>
+      <li><b>看得见真实的飞机。</b>实时 ADS-B 数据，用平实的话说出来。</li>
+      <li><b>从不虚张声势。</b>每个答复都带有来源；无法确认的，它会明确说明。</li>
+    </ul>
+  </div>
+
+  <div class="card" lang="zh">
+    <h2>演示用订座编号</h2><div class="hr"></div>
+    <div class="pnr-row">
+      <div class="pnr"><code>K7X2M9</code><span>坎帕拉 → 伦敦</span></div>
+      <div class="pnr"><code>P3L8QK</code><span>孟买 → 伦敦</span></div>
+      <div class="pnr"><code>T4B9RD</code><span>迪拜 → 贝鲁特</span></div>
+    </div>
+    <p class="note">订座为演示数据——但 Raahi 对其所做的每一项核查都是实时的。</p>
+  </div>
+
+  <div class="talk-cue" lang="zh">
+    <strong>点击麦克风，直接说话</strong>
+    <span>用中文提问——Raahi 会跟随您的语言。</span>
+  </div>`;
+
 router.get('/talk', (req, res) => {
   res.type('html').send(`<!doctype html>
 <html lang="en">
@@ -336,12 +443,15 @@ ${HEADER}
 
   <main>
     <div class="lang">
-      <button id="btn-en" class="on" onclick="setLang('en')">English</button>
-      <button id="btn-ar" onclick="setLang('ar')">العربية</button>
+      ${LANGS.map(([code, label], i) =>
+        `<button id="btn-${code}" class="${i === 0 ? 'on' : ''}" onclick="setLang('${code}')">${label}</button>`
+      ).join('')}
     </div>
 
     <div data-lang="en">${EN_CONTENT}</div>
     <div data-lang="ar">${AR_CONTENT}</div>
+    <div data-lang="fr">${FR_CONTENT}</div>
+    <div data-lang="zh">${ZH_CONTENT}</div>
 
     <elevenlabs-convai agent-id="${AGENT_ID}"></elevenlabs-convai>
     <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
