@@ -10,9 +10,16 @@ That answer is not in any database. It exists as a sentence on a web page that c
 
 Built for the BUiD Voice Agents Hackathon, Dubai — 8 August 2026.
 
-- **Voice layer:** ElevenLabs Conversational Agents (8 webhook tools)
-- **Live web data:** [context.dev](https://context.dev) scrape-to-Markdown API
-- **Backend:** Node 18+ / Express, deployed on Render
+- **Live backend:** https://irops-copilot-backend.onrender.com ([health](https://irops-copilot-backend.onrender.com/healthz))
+- **Voice layer:** ElevenLabs Conversational Agents — 12 webhook tools + a native MCP server
+- **Live web data:** [context.dev](https://context.dev) — scrape, web search, and change-detection Monitors
+- **Live aircraft data:** [adsb.lol](https://adsb.lol) ADS-B (keyless, ODbL)
+- **Backend:** Node 18+ / Express on Render, 49 tests, zero runtime dependencies beyond Express + node-fetch
+
+**Deep dives:** [Architecture walkthrough](docs/architecture.md) — how a question penetrates
+every layer, with the demo call traced hop by hop · [Question bank](docs/question-bank.md) —
+every class of question the agent answers, and what it honestly refuses ·
+[Demo script](docs/demo-script.md) · [TECH-SPEC](TECH-SPEC.md)
 
 ---
 
@@ -309,6 +316,29 @@ elevenlabs/              Agent prompt, voice settings, 12 tool definitions
 docs/demo-script.md      The three-question demo run
 TECH-SPEC.md             Engineering reasoning
 ```
+
+---
+
+## Feature log
+
+Everything built, in the order it was earned. Each row is verifiable in the commit history.
+
+| # | Feature | The judgement call inside it |
+| --- | --- | --- |
+| 1 | 8 webhook tools, degradation chain (live → cache → static → spoken apology) | A failed tool call is a voice agent going silent mid-sentence, so no endpoint may ever 500 |
+| 2 | Advisory parser (`lib/advisory.js`) | Restrictions key off where you have *been*: destination-only matching tells the Kampala passenger she is fine. She is not |
+| 3 | Live scrape via context.dev, cache warm on boot + 10-min background refresh | `/healthz` exposes `advisory_age_s` so the freshness claim is checkable, not asserted |
+| 4 | ADS-B live aircraft position (`flight_status`, split sources) | `schedule_source: mock` next to `position_source: live` — the live half must not lend credibility to the static half |
+| 5 | `entry_requirements` — EU EES + UK ETA | Main-clause classification: "If you do **not** need a visa… you **will** need an ETA" is a requirement, not an exemption |
+| 6 | Markdown-aware sentence splitting | "Last updated: … (GMT+4)" has no full stop and was gluing itself to the next paragraph, hiding the ETA rule |
+| 7 | Multi-source registry — gov.uk, europa.eu, EK FAQ | Every URL verified by an actual scrape before inclusion; three plausible ones 404'd and were left out |
+| 8 | `travel_intel` — context.dev web search fallback | Allowlisted to 3 official domains — measured: 2 domains 2.4s, 10 domains 40s+, so the cap is a latency decision |
+| 9 | context.dev **Monitor** + signed webhook + `recent_changes` | Polling says what a page says; a monitor says it *changed*. HMAC + replay rejection because a forged webhook is a lie-injection vector |
+| 10 | `journey_brief` — PNR → 5 parallel live checks in ~2s | Precedence: refused-at-gate beats closed-destination beats paperwork. The PNR store is the one labelled stub |
+| 11 | Native **MCP server** at `/mcp` + 2 tracking tools | The registry MCPs are stdio-only and unattachable; we host the capability class ourselves on licensed data |
+| 12 | Request coalescing | 3 parallel identical scrapes = 1 request; found when a 12-tool burst blew the 10 req/min limit |
+| 13 | Agent behavioural hardening | Simulation caught it fabricating an all-clear from a stubbed tool and caving to repeated questions — both now forbidden and pinned |
+| 14 | ElevenLabs to the fullest | ASR keyword boosting, eager turns, tool-call sounds, end_call, language detection, post-call evaluation criteria + data collection |
 
 ---
 
