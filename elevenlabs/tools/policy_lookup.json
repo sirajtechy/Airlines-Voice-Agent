@@ -1,0 +1,25 @@
+{
+  "type": "webhook",
+  "name": "policy_lookup",
+  "description": "Look up Emirates passenger policy on delays, cancellations, baggage, missed connections or refunds. Use when the caller asks what they are entitled to.",
+  "response_timeout_secs": 20,
+  "api_schema": {
+    "url": "https://irops-copilot-backend.onrender.com/tools/policy_lookup",
+    "method": "POST",
+    "request_headers": {
+      "Content-Type": "application/json"
+    },
+    "request_body_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "One of: delay_compensation, cancellation, baggage_delay, missed_connection, refund"
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    }
+  }
+}

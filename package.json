@@ -1,0 +1,20 @@
+{
+  "name": "irops-copilot-backend",
+  "version": "1.0.0",
+  "description": "Voice-first flight-disruption copilot backend. ElevenLabs Conversational Agent webhook tools backed by live web data from context.dev.",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "node-fetch": "^2.7.0"
+  },
+  "license": "MIT"
+}

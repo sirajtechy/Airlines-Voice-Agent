@@ -1,0 +1,27 @@
+{
+  "type": "webhook",
+  "name": "rebooking_options",
+  "description": "List the next available flights to a destination and whether same-airline rebooking is even possible. Use after confirming a disruption.",
+  "response_timeout_secs": 20,
+  "api_schema": {
+    "url": "https://irops-copilot-backend.onrender.com/tools/rebooking_options",
+    "method": "POST",
+    "request_headers": {
+      "Content-Type": "application/json"
+    },
+    "request_body_schema": {
+      "type": "object",
+      "properties": {
+        "flight_no": {
+          "type": "string",
+          "description": "The disrupted flight number, e.g. EK17"
+        },
+        "destination": {
+          "type": "string",
+          "description": "Destination city or IATA code"
+        }
+      },
+      "required": []
+    }
+  }
+}

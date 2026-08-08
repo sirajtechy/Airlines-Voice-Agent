@@ -1,0 +1,25 @@
+{
+  "type": "webhook",
+  "name": "turnaround_brief",
+  "description": "Operational turnaround brief for a departing flight: stand, ground time, critical path and risks. Use for staff-facing questions.",
+  "response_timeout_secs": 20,
+  "api_schema": {
+    "url": "https://irops-copilot-backend.onrender.com/tools/turnaround_brief",
+    "method": "POST",
+    "request_headers": {
+      "Content-Type": "application/json"
+    },
+    "request_body_schema": {
+      "type": "object",
+      "properties": {
+        "flight_no": {
+          "type": "string",
+          "description": "Flight number, e.g. EK17"
+        }
+      },
+      "required": [
+        "flight_no"
+      ]
+    }
+  }
+}

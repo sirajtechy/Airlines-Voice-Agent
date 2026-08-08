@@ -1,0 +1,25 @@
+{
+  "type": "webhook",
+  "name": "stranded_support",
+  "description": "Practical guidance for a stranded passenger: hotels, meals, vouchers and which desk to go to. Use when the caller is stuck at an airport.",
+  "response_timeout_secs": 20,
+  "api_schema": {
+    "url": "https://irops-copilot-backend.onrender.com/tools/stranded_support",
+    "method": "POST",
+    "request_headers": {
+      "Content-Type": "application/json"
+    },
+    "request_body_schema": {
+      "type": "object",
+      "properties": {
+        "location": {
+          "type": "string",
+          "description": "Where the caller is stranded, e.g. Dubai"
+        }
+      },
+      "required": [
+        "location"
+      ]
+    }
+  }
+}

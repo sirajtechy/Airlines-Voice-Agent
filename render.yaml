@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: irops-copilot-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: CONTEXT_DEV_API_KEY
+        sync: false
+      - key: TOOL_SHARED_SECRET
+        sync: false
+      - key: FETCH_TIMEOUT_MS
+        value: "8000"

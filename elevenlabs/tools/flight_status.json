@@ -1,0 +1,25 @@
+{
+  "type": "webhook",
+  "name": "flight_status",
+  "description": "Get the current status of a specific flight: delay, gate, aircraft and the reason for any disruption. Use when the caller names a flight number.",
+  "response_timeout_secs": 20,
+  "api_schema": {
+    "url": "https://irops-copilot-backend.onrender.com/tools/flight_status",
+    "method": "POST",
+    "request_headers": {
+      "Content-Type": "application/json"
+    },
+    "request_body_schema": {
+      "type": "object",
+      "properties": {
+        "flight_no": {
+          "type": "string",
+          "description": "Flight number, e.g. EK17"
+        }
+      },
+      "required": [
+        "flight_no"
+      ]
+    }
+  }
+}

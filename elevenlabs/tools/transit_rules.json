@@ -1,0 +1,30 @@
+{
+  "type": "webhook",
+  "name": "transit_rules",
+  "description": "Check whether passengers transiting through Dubai to a final destination are currently being accepted for travel. Use when the caller has a connection.",
+  "response_timeout_secs": 20,
+  "api_schema": {
+    "url": "https://irops-copilot-backend.onrender.com/tools/transit_rules",
+    "method": "POST",
+    "request_headers": {
+      "Content-Type": "application/json"
+    },
+    "request_body_schema": {
+      "type": "object",
+      "properties": {
+        "origin": {
+          "type": "string",
+          "description": "Where the caller starts their journey"
+        },
+        "final_destination": {
+          "type": "string",
+          "description": "Their final destination city or airport code"
+        }
+      },
+      "required": [
+        "origin",
+        "final_destination"
+      ]
+    }
+  }
+}

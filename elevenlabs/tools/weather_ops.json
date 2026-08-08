@@ -1,0 +1,25 @@
+{
+  "type": "webhook",
+  "name": "weather_ops",
+  "description": "Get the current weather observation for an airport and what it means for operations. Use when weather could explain a delay.",
+  "response_timeout_secs": 20,
+  "api_schema": {
+    "url": "https://irops-copilot-backend.onrender.com/tools/weather_ops",
+    "method": "POST",
+    "request_headers": {
+      "Content-Type": "application/json"
+    },
+    "request_body_schema": {
+      "type": "object",
+      "properties": {
+        "airport": {
+          "type": "string",
+          "description": "Airport city name, IATA or ICAO code, e.g. Dubai, DXB or OMDB"
+        }
+      },
+      "required": [
+        "airport"
+      ]
+    }
+  }
+}
