@@ -124,4 +124,47 @@ function fromWebhook(payload) {
   };
 }
 
-module.exports = { record, recent, count, clear, verifySignature, fromWebhook, MAX_CHANGES };
+/**
+ * Completed conversations pushed to us by ElevenLabs after each call.
+ *
+ * Kept because the agent's own evaluation criteria — answered-not-stalled,
+ * sourced-honestly, gave-next-action — are only useful if somebody reads them.
+ * Same in-memory ring as the advisory changes: operational signal, not a record.
+ */
+const MAX_CALLS = 25;
+const calls = [];
+
+function recordCall(entry) {
+  calls.unshift({ ...entry, received_at: new Date().toISOString() });
+  if (calls.length > MAX_CALLS) calls.length = MAX_CALLS;
+  return calls[0];
+}
+
+function recentCalls(limit = 10) {
+  return calls.slice(0, limit);
+}
+
+/** Roll the per-call evaluation results up into a pass rate per criterion. */
+function callStats() {
+  const tally = {};
+  for (const c of calls) {
+    for (const [name, result] of Object.entries(c.criteria || {})) {
+      tally[name] = tally[name] || { success: 0, failure: 0, unknown: 0 };
+      tally[name][result] = (tally[name][result] || 0) + 1;
+    }
+  }
+  return { calls: calls.length, criteria: tally };
+}
+
+module.exports = {
+  record,
+  recent,
+  count,
+  clear,
+  verifySignature,
+  fromWebhook,
+  recordCall,
+  recentCalls,
+  callStats,
+  MAX_CHANGES,
+};

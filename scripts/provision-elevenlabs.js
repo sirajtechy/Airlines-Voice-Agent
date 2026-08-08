@@ -242,7 +242,34 @@ async function upsertMcpServer() {
   }
 }
 
-function buildAgentConfig({ systemPrompt, firstMessage }, toolIds, mcpServerIds) {
+/**
+ * Attach every knowledge-base document in the workspace.
+ *
+ * These carry the slow-changing operational knowledge no tool returns —
+ * minimum connection times, which concourse the transfer desk is in, when
+ * EU261 does and does not apply. Retrieval rather than prompt-stuffing: the
+ * corpus is far larger than a system prompt should be, and RAG keeps the
+ * prompt about *behaviour* while the documents carry *facts*.
+ */
+async function knowledgeBase() {
+  if (DRY_RUN) return [];
+  try {
+    const res = await api('GET', '/convai/knowledge-base');
+    const docs = (res.documents || []).map((d) => ({
+      type: d.type || 'text',
+      id: d.id,
+      name: d.name,
+      usage_mode: 'auto',
+    }));
+    if (docs.length) console.log(`\n  knowledge base   ${docs.length} document(s): ${docs.map((d) => d.name).join(', ')}`);
+    return docs;
+  } catch (err) {
+    console.log(`\n  !! could not read knowledge base (${err.message.split('\n')[0]}) — continuing without it`);
+    return [];
+  }
+}
+
+function buildAgentConfig({ systemPrompt, firstMessage }, toolIds, mcpServerIds, kbDocs = []) {
   return {
     name: AGENT_NAME,
     conversation_config: {
@@ -255,6 +282,15 @@ function buildAgentConfig({ systemPrompt, firstMessage }, toolIds, mcpServerIds)
           temperature: 0,
           tool_ids: toolIds,
           mcp_server_ids: mcpServerIds,
+          knowledge_base: kbDocs,
+          rag: kbDocs.length
+            ? {
+                enabled: true,
+                embedding_model: 'e5_mistral_7b_instruct',
+                max_documents_length: 50000,
+                max_retrieved_rag_chunks_count: 10,
+              }
+            : undefined,
           built_in_tools: {
             // Let the agent close cleanly once the caller is sorted, rather
             // than idling on an open line until the duration cap.
@@ -270,6 +306,21 @@ function buildAgentConfig({ systemPrompt, firstMessage }, toolIds, mcpServerIds)
               name: 'language_detection',
               type: 'system',
               params: { system_tool_type: 'language_detection', only_at_conversation_start: false },
+            },
+            // Retrieval is a tool call rather than always-on context, so the
+            // agent reaches for reference knowledge only when a question
+            // actually needs it and the latency is not paid on every turn.
+            knowledge_base_rag: {
+              name: 'knowledge_base_rag',
+              type: 'system',
+              params: { system_tool_type: 'knowledge_base_rag' },
+            },
+            // Lets the agent hold the line silently while a caller is reading a
+            // boarding pass, instead of filling the gap with chatter.
+            skip_turn: {
+              name: 'skip_turn',
+              type: 'system',
+              params: { system_tool_type: 'skip_turn' },
             },
           },
         },
@@ -343,6 +394,19 @@ function buildAgentConfig({ systemPrompt, firstMessage }, toolIds, mcpServerIds)
         // Stressed callers read hesitation as the system being broken, and our
         // tools return in about a second, so lean forward.
         turn_eagerness: 'eager',
+        // Start composing during the pause before turn confidence is reached.
+        // Costs some LLM spend, buys perceptible responsiveness.
+        speculative_turn: true,
+        // travel_intel can take ~6s. Rather than dead air, acknowledge once —
+        // this is the platform speaking during generation, not the agent
+        // stalling, which the prompt separately forbids.
+        soft_timeout_config: {
+          timeout_seconds: 4.0,
+          message: 'Still checking that for you.',
+          max_soft_timeouts_per_generation: 1,
+        },
+        // Callers spell booking references letter by letter; do not cut in.
+        spelling_patience: 'auto',
       },
       conversation: {
         max_duration_seconds: 600,
@@ -475,7 +539,8 @@ async function main() {
   const toolIds = await upsertTools(toolConfigs);
   const mcpServerId = await upsertMcpServer();
   const mcpServerIds = mcpServerId ? [mcpServerId] : [];
-  const agentId = await upsertAgent(buildAgentConfig(prompt, toolIds, mcpServerIds));
+  const kbDocs = await knowledgeBase();
+  const agentId = await upsertAgent(buildAgentConfig(prompt, toolIds, mcpServerIds, kbDocs));
 
   if (agentId) {
     console.log(`\n  Talk to it: https://elevenlabs.io/app/conversational-ai/agents/${agentId}\n`);

@@ -122,6 +122,51 @@ app.use(
   })
 );
 
+/**
+ * ElevenLabs posts here when a conversation ends, carrying the transcript and
+ * the post-call analysis. We keep the evaluation verdicts so the agent's
+ * behaviour is measured rather than assumed — the criteria it is scored on are
+ * exactly the failures we hit during the build (stalling, overclaiming, no
+ * next action).
+ *
+ * Signed with the same HMAC scheme as the context.dev monitor, so it reuses
+ * that verifier. Always 200s: a webhook endpoint that errors gets retried and
+ * then disabled.
+ */
+app.post('/webhooks/elevenlabs', (req, res) => {
+  const secret = (process.env.ELEVENLABS_WEBHOOK_SECRET || '').trim();
+  const signature = req.get('elevenlabs-signature') || req.get('ElevenLabs-Signature');
+  if (secret && !changes.verifySignature(req.rawBody || '', signature, secret)) {
+    req.log?.('[el-webhook] rejected: bad signature');
+    return res.status(401).json({ ok: false });
+  }
+
+  const d = req.body?.data || req.body || {};
+  const analysis = d.analysis || {};
+  const criteria = Object.fromEntries(
+    Object.entries(analysis.evaluation_criteria_results || {}).map(([k, v]) => [k, v?.result])
+  );
+
+  const entry = changes.recordCall({
+    conversation_id: d.conversation_id || null,
+    agent_id: d.agent_id || null,
+    status: d.status || null,
+    duration_s: d.metadata?.call_duration_secs ?? null,
+    turns: Array.isArray(d.transcript) ? d.transcript.length : null,
+    summary: analysis.transcript_summary || null,
+    call_successful: analysis.call_successful || null,
+    criteria,
+    collected: analysis.data_collection_results || null,
+  });
+  req.log?.(`[el-webhook] call ${entry.conversation_id} ${JSON.stringify(criteria)}`);
+  res.status(200).json({ ok: true });
+});
+
+/** Read the scoreboard the post-call webhook builds. */
+app.get('/admin/calls', (req, res) => {
+  res.status(200).json({ ...changes.callStats(), recent: changes.recentCalls() });
+});
+
 app.use('/tools', toolsRouter);
 app.use('/mcp', require('./routes/mcp'));
 app.use('/', require('./routes/talk'));

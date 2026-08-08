@@ -181,6 +181,7 @@ Runtime — read by the server:
 | `PORT` | no | `3000` | Render injects this |
 | `TOOL_SHARED_SECRET` | no | *(off)* | If set, `/tools/*` and `/admin/*` require an `x-tool-secret` header |
 | `CONTEXT_WEBHOOK_SECRET` | for monitors | *(off)* | HMAC secret for `/webhooks/context`. Printed by `setup-monitor.js`; unset means deliveries are accepted unverified |
+| `ELEVENLABS_WEBHOOK_SECRET` | for post-call | *(off)* | HMAC secret for `/webhooks/elevenlabs`, which receives transcripts and evaluation scores |
 | `FETCH_TIMEOUT_MS` | no | `12000` | context.dev scrape budget. Must stay under the ElevenLabs 20s tool timeout |
 | `SEARCH_TIMEOUT_MS` | no | `10000` | `travel_intel` search budget |
 | `ADSB_TIMEOUT_MS` | no | `6000` | adsb.lol budget. Enrichment only, so deliberately shortest |
