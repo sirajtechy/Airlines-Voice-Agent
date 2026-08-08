@@ -7,6 +7,7 @@ const toolsRouter = require('./routes/tools');
 const ctx = require('./lib/contextClient');
 const cache = require('./lib/cache');
 const changes = require('./lib/changes');
+const guard = require('./lib/guard');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,7 +34,11 @@ app.use((err, req, res, next) => {
 });
 
 app.use((req, res, next) => {
-  req.log = (msg) => console.log(`${new Date().toISOString()} ${msg}`);
+  // Everything logged goes through redaction. A frightened passenger reading
+  // their card number aloud is not an attack, but it would otherwise land in
+  // log retention in plaintext — and the agent's own guardrails cannot reach
+  // down here to stop it.
+  req.log = (msg) => console.log(`${new Date().toISOString()} ${guard.redact(msg)}`);
   if (req.path.startsWith('/tools/')) {
     req.log(`-> ${req.method} ${req.path} ${JSON.stringify(req.body || {})}`);
   }

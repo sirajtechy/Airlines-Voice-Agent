@@ -6,6 +6,7 @@
  * mention the destination, then classify them.
  */
 
+const guard = require('./guard');
 const {
   cityToIata,
   airports,
@@ -109,7 +110,10 @@ function extractDate(text) {
 }
 
 function truncate(text, max) {
-  const clean = String(text).replace(/\s+/g, ' ').trim();
+  // Every scraped string the agent will hear passes through here, which makes
+  // it the one place worth defanging indirect prompt injection: advisory prose
+  // is untrusted input that we hand straight to an LLM.
+  const clean = guard.neutralizeInjection(String(text).replace(/\s+/g, ' ').trim());
   if (clean.length <= max) return clean;
   return `${clean.slice(0, max - 1).trimEnd()}…`;
 }
@@ -228,11 +232,26 @@ function parseTransitRules(markdown, origin, finalDestination) {
   //    history rather than destination.
   if (origin) {
     const originWindow = contextWindow(all, aliasesFor(origin));
-    if (
-      originWindow.hits.length &&
-      RESTRICTION_RE.test(originWindow.blob) &&
-      TRANSIT_SCOPE_RE.test(originWindow.blob)
-    ) {
+
+    // Two separate questions, deliberately scoped differently.
+    //
+    // "Is there a restriction naming this origin?" is origin-specific, so it
+    // is asked of the sentence window only — asking the whole document would
+    // blame any restriction on any origin.
+    //
+    // "Do these restrictions extend to transit passengers?" is a property of
+    // the advisory as a whole, so it is asked of the whole document. It used to
+    // be asked of the window too, and that was a real bug: one extra sentence
+    // between the restriction and the sentence saying it "applies to all
+    // travellers, even those arriving by indirect routings" pushed the proof
+    // out of the ±1 window and flipped the answer from blocked to allowed.
+    // Advisories get edited, and prose drifts; the safe reading must not
+    // depend on two sentences staying adjacent.
+    const restrictionNamesOrigin =
+      originWindow.hits.length && RESTRICTION_RE.test(originWindow.blob);
+    const restrictionsCoverTransit = TRANSIT_SCOPE_RE.test(all.join(' '));
+
+    if (restrictionNamesOrigin && restrictionsCoverTransit) {
       const restrictionSentence =
         originWindow.hits.find((s) => RESTRICTION_RE.test(s)) || originWindow.hits[0];
       const condition = restrictionSentence.match(CONDITION_RE);
