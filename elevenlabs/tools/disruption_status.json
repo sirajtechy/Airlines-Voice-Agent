@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "disruption_status",
-  "description": "Check the live Emirates travel-updates page for whether flights to a destination are suspended, until when, and the advisory text. Use whenever a caller asks if a route is running.",
+  "description": "Check the live Emirates travel-updates page for whether travel to a destination is blocked — by route suspension or by entry restriction — until when, and the exact advisory wording. Use whenever a caller asks if travel somewhere is possible.",
   "response_timeout_secs": 20,
   "api_schema": {
     "url": "https://irops-copilot-backend.onrender.com/tools/disruption_status",

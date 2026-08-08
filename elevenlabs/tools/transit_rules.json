@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "transit_rules",
-  "description": "Check whether passengers transiting through Dubai to a final destination are currently being accepted for travel. Use when the caller has a connection.",
+  "description": "Check whether a passenger can transit through Dubai, given BOTH where they are coming from and where they are going. Restrictions often key off recent travel history rather than destination, so always supply origin as well as final_destination. Use whenever the journey has a connection.",
   "response_timeout_secs": 20,
   "api_schema": {
     "url": "https://irops-copilot-backend.onrender.com/tools/transit_rules",
@@ -14,7 +14,7 @@
       "properties": {
         "origin": {
           "type": "string",
-          "description": "Where the caller starts their journey"
+          "description": "Where the caller is travelling FROM (city or country). Required — restrictions frequently depend on it."
         },
         "final_destination": {
           "type": "string",

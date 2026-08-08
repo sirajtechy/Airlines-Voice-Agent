@@ -6,7 +6,7 @@
  * mention the destination, then classify them.
  */
 
-const { cityToIata, airports } = require('../data/mocks');
+const { cityToIata, airports, countryAliases } = require('../data/mocks');
 
 /** Split markdown into sentence-ish chunks, stripping markdown noise. */
 function sentences(markdown) {
@@ -37,6 +37,10 @@ function aliasesFor(destination) {
     set.add(asIata.toLowerCase());
     if (airports[asIata]) set.add(airports[asIata].city.toLowerCase());
   }
+
+  // Country-level advisories name the country, not the airport.
+  for (const alias of countryAliases[lower] || []) set.add(alias);
+
   return [...set].filter((a) => a.length >= 3);
 }
 
@@ -50,8 +54,14 @@ function escapeRe(s) {
 }
 
 const SUSPENSION_RE = /\b(suspend|suspended|suspension|cancell?ed|not operat|will not operate|remain cancelled)\b/i;
-const RESUME_RE = /\b(resume|resuming|resumption|will operate|reinstat)\b/i;
-const EXTENDED_RE = /\b(extend|extended|further extended|until further notice)\b/i;
+// Entry/screening restrictions block travel just as effectively as a cancelled
+// route, and are what airlines actually publish most of the time.
+const RESTRICTION_RE = /\b(will not allow entry|not be allowed entry|entry restriction|travel restriction|entry ban|denied entry|enhanced screening|entry requirement|not be permitted)\b/i;
+const RESUME_RE = /\b(resume|resuming|resumption|will operate|reinstat|lifted|no longer applies)\b/i;
+// Deliberately excludes "until further notice" — that means open-ended, not
+// previously extended, and open_ended already reports it.
+const EXTENDED_RE = /\b(extend|extended|further extended)\b/i;
+const OPEN_ENDED_RE = /\buntil further notice\b/i;
 const TRANSIT_BLOCK_RE = /\b(transit|transiting|connecting)\b[^.]*\b(will not be accepted|not be accepted|cannot be accepted|are not accepted|unable to accept)\b/i;
 const TRANSIT_OK_RE = /\b(transit|transiting|connecting)\b[^.]*\b(will be accepted|are accepted|can be accepted|resume)\b/i;
 const SUPPORT_RE = /\b(hotel|accommodation|meal|voucher|refreshment|rebook|rebooking|assistance|support desk|transfer desk)\b/i;
@@ -84,57 +94,93 @@ function truncate(text, max) {
 }
 
 /**
- * @returns {{suspended:boolean, suspended_until:string|null, extended_before:boolean, advisory_text:string, matched:boolean}}
+ * Sentences mentioning `aliases`, plus one sentence either side. Advisories put
+ * the qualifier that changes the answer ("effective 6 June", "until further
+ * notice", "this has been extended") in a neighbouring sentence, so matching a
+ * single sentence reads the restriction but misses its scope.
+ */
+function contextWindow(all, aliases) {
+  const hitIndexes = all.map((s, i) => (mentions(s, aliases) ? i : -1)).filter((i) => i >= 0);
+  const window = new Set();
+  for (const i of hitIndexes) {
+    for (let j = Math.max(0, i - 1); j <= Math.min(i + 1, all.length - 1); j++) window.add(j);
+  }
+  return {
+    hitIndexes,
+    hits: hitIndexes.map((i) => all[i]),
+    blob: [...window].sort((a, b) => a - b).map((i) => all[i]).join(' '),
+  };
+}
+
+/**
+ * @returns {{blocked:boolean, restriction_type:'suspension'|'entry_restriction'|null,
+ *            suspended:boolean, suspended_until:string|null, open_ended:boolean,
+ *            extended_before:boolean, advisory_text:string, matched:boolean}}
  */
 function parseDisruption(markdown, destination) {
   const aliases = aliasesFor(destination);
   const all = markdown ? sentences(markdown) : [];
-  const hitIndexes = all.map((s, i) => (mentions(s, aliases) ? i : -1)).filter((i) => i >= 0);
-  const hits = hitIndexes.map((i) => all[i]);
+  const { hits, blob } = contextWindow(all, aliases);
 
   if (!hits.length) {
     return {
+      blocked: false,
+      restriction_type: null,
       suspended: false,
       suspended_until: null,
+      open_ended: false,
       extended_before: false,
-      advisory_text: `No current suspension found for ${destination}.`,
+      advisory_text: `No current travel disruption found for ${destination}.`,
       matched: false,
     };
   }
 
-  // Advisories carry qualifiers ("this has been extended", "until 10 August")
-  // in the sentence *after* the one naming the route, so read a small window
-  // around each hit rather than the hit alone.
-  const window = new Set();
-  for (const i of hitIndexes) {
-    for (let j = i; j <= Math.min(i + 1, all.length - 1); j++) window.add(j);
-  }
-  const blob = [...window].sort((a, b) => a - b).map((i) => all[i]).join(' ');
+  const lifted = RESUME_RE.test(blob) && !SUSPENSION_RE.test(hits[0]);
+  const suspended = SUSPENSION_RE.test(blob) && !lifted;
+  const restricted = RESTRICTION_RE.test(blob) && !lifted;
 
-  // A "resume" sentence beats a "suspend" sentence only when it is the later word.
-  const suspended = SUSPENSION_RE.test(blob) && !(RESUME_RE.test(blob) && !SUSPENSION_RE.test(hits[0]));
-  const relevant = hits.find((s) => SUSPENSION_RE.test(s)) || hits[0];
+  const relevant =
+    hits.find((s) => SUSPENSION_RE.test(s)) ||
+    hits.find((s) => RESTRICTION_RE.test(s)) ||
+    hits[0];
+
+  // "until further notice" means there is no end date — do not mistake the
+  // effective-from date in the same sentence for one.
+  const openEnded = OPEN_ENDED_RE.test(blob);
 
   return {
+    blocked: suspended || restricted,
+    restriction_type: suspended ? 'suspension' : restricted ? 'entry_restriction' : null,
     suspended,
-    suspended_until: extractDate(blob),
+    suspended_until: openEnded ? null : extractDate(blob),
+    open_ended: openEnded,
     extended_before: EXTENDED_RE.test(blob),
     advisory_text: truncate(relevant, 300),
     matched: true,
   };
 }
 
+const TRANSIT_SCOPE_RE = /\b(transit|transiting|connecting|indirect routing|point of origin)\b/i;
+const CONDITION_RE = /\bunless\b[^.]*/i;
+
 /**
- * @returns {{transit_allowed:boolean, explanation:string, matched:boolean}}
+ * Transit can be blocked by the destination (route suspended, connections
+ * refused) OR by where the passenger has recently been — entry restrictions
+ * key off origin, not destination. Check both sides.
+ *
+ * @returns {{transit_allowed:boolean, conditional:boolean, explanation:string, matched:boolean}}
  */
 function parseTransitRules(markdown, origin, finalDestination) {
-  const aliases = aliasesFor(finalDestination);
-  const hits = markdown ? sentences(markdown).filter((s) => mentions(s, aliases)) : [];
-  const blocked = hits.find((s) => TRANSIT_BLOCK_RE.test(s));
+  const all = markdown ? sentences(markdown) : [];
+  const destAliases = aliasesFor(finalDestination);
+  const destHits = all.filter((s) => mentions(s, destAliases));
 
+  // 1. Destination side: connections explicitly refused.
+  const blocked = destHits.find((s) => TRANSIT_BLOCK_RE.test(s));
   if (blocked) {
     return {
       transit_allowed: false,
+      conditional: false,
       explanation: truncate(
         `Transit through Dubai to ${finalDestination} is not being accepted right now. ${blocked}`,
         250
@@ -143,20 +189,12 @@ function parseTransitRules(markdown, origin, finalDestination) {
     };
   }
 
-  const allowed = hits.find((s) => TRANSIT_OK_RE.test(s));
-  if (allowed) {
-    return {
-      transit_allowed: true,
-      explanation: truncate(`Transit through Dubai to ${finalDestination} is being accepted. ${allowed}`, 250),
-      matched: true,
-    };
-  }
-
-  // Route suspended but transit not called out — connecting travel is effectively off.
+  // 2. Destination side: route suspended, so the connection cannot complete.
   const disruption = parseDisruption(markdown, finalDestination);
   if (disruption.matched && disruption.suspended) {
     return {
       transit_allowed: false,
+      conditional: false,
       explanation: truncate(
         `Flights to ${finalDestination} are suspended, so a connection through Dubai cannot be completed. ${disruption.advisory_text}`,
         250
@@ -165,9 +203,45 @@ function parseTransitRules(markdown, origin, finalDestination) {
     };
   }
 
+  // 3. Origin side: entry/transit restrictions that key off recent travel
+  //    history rather than destination.
+  if (origin) {
+    const originWindow = contextWindow(all, aliasesFor(origin));
+    if (
+      originWindow.hits.length &&
+      RESTRICTION_RE.test(originWindow.blob) &&
+      TRANSIT_SCOPE_RE.test(originWindow.blob)
+    ) {
+      const restrictionSentence =
+        originWindow.hits.find((s) => RESTRICTION_RE.test(s)) || originWindow.hits[0];
+      const condition = restrictionSentence.match(CONDITION_RE);
+      return {
+        transit_allowed: false,
+        conditional: Boolean(condition),
+        explanation: truncate(
+          `There is a current entry and transit restriction affecting travellers coming from ${origin}. ${restrictionSentence}`,
+          250
+        ),
+        matched: true,
+      };
+    }
+  }
+
+  // 4. Destination side: connections explicitly confirmed.
+  const allowed = destHits.find((s) => TRANSIT_OK_RE.test(s));
+  if (allowed) {
+    return {
+      transit_allowed: true,
+      conditional: false,
+      explanation: truncate(`Transit through Dubai to ${finalDestination} is being accepted. ${allowed}`, 250),
+      matched: true,
+    };
+  }
+
   return {
     transit_allowed: true,
-    explanation: `No transit restriction is published for passengers travelling from ${origin} through Dubai to ${finalDestination}. Check in as normal, and confirm at the transfer desk on arrival.`,
+    conditional: false,
+    explanation: `No transit restriction is published for passengers travelling from ${origin || 'your origin'} through Dubai to ${finalDestination}. Check in as normal, and confirm at the transfer desk on arrival.`,
     matched: disruption.matched,
   };
 }

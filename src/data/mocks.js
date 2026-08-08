@@ -140,8 +140,30 @@ const cityToIata = {
   amman: 'AMM',
 };
 
+/**
+ * Country name variants. Advisories name countries, callers say whatever they
+ * say — "DRC", "the Congo", "Kampala". Maps any of those to the phrases that
+ * actually appear in the advisory prose.
+ */
+const countryAliases = {
+  drc: ['democratic republic of congo', 'congo', 'drc'],
+  'democratic republic of congo': ['democratic republic of congo', 'congo'],
+  congo: ['democratic republic of congo', 'congo'],
+  uganda: ['uganda'],
+  kampala: ['uganda'],
+  ebb: ['uganda'],
+  'south sudan': ['south sudan'],
+  juba: ['south sudan'],
+  jub: ['south sudan'],
+  uae: ['uae', 'united arab emirates', 'dubai'],
+  'united arab emirates': ['uae', 'united arab emirates', 'dubai'],
+  dubai: ['dubai', 'uae', 'united arab emirates'],
+  dxb: ['dubai', 'uae', 'united arab emirates'],
+};
+
 module.exports = {
   flightDB,
+  countryAliases,
   policies,
   rebookingOptions,
   turnaroundBriefs,

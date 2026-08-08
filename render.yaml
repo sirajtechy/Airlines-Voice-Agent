@@ -12,4 +12,4 @@ services:
       - key: TOOL_SHARED_SECRET
         sync: false
       - key: FETCH_TIMEOUT_MS
-        value: "8000"
+        value: "12000"

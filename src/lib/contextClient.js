@@ -6,7 +6,7 @@ const cache = require('./cache');
 // AbortController is global on Node 18+ (see engines in package.json).
 
 const CONTEXT_API = 'https://api.context.dev/v1/web/scrape/markdown';
-const TIMEOUT_MS = Number(process.env.FETCH_TIMEOUT_MS || 8000);
+const TIMEOUT_MS = Number(process.env.FETCH_TIMEOUT_MS || 12000);
 
 /**
  * URLs we keep warm so a cold judge demo never waits on a live scrape.

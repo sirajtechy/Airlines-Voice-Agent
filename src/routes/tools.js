@@ -205,14 +205,14 @@ router.post(
     const scraped = await ctx.scrape(EMIRATES_UPDATES);
     const disruption = destInput
       ? advisory.parseDisruption(scraped.data, destInput)
-      : { suspended: false };
+      : { blocked: false };
 
     res.status(200).json({
       destination: destInput || null,
-      route_suspended: Boolean(disruption.suspended),
+      route_blocked: Boolean(disruption.blocked),
       options,
-      advice: disruption.suspended
-        ? `Emirates flights to ${destInput} are suspended, so a same-airline rebooking is not possible yet. The realistic move is a partner carrier or a refund.`
+      advice: disruption.blocked
+        ? `Travel to ${destInput} is currently restricted, so a same-airline rebooking may not be possible yet. ${disruption.advisory_text}`
         : 'Seats shown are the next available services. The transfer desk can hold one for you while you decide.',
       source: scraped.source,
     });
@@ -271,8 +271,11 @@ router.post(
 
     res.status(200).json({
       destination,
+      blocked: parsed.blocked,
+      restriction_type: parsed.restriction_type,
       suspended: parsed.suspended,
       suspended_until: parsed.suspended_until,
+      open_ended: parsed.open_ended,
       extended_before: parsed.extended_before,
       advisory_text: parsed.advisory_text,
       source: scraped.source,
@@ -300,6 +303,7 @@ router.post(
 
     res.status(200).json({
       transit_allowed: parsed.transit_allowed,
+      conditional: parsed.conditional,
       explanation: parsed.explanation,
       source: scraped.source,
     });

@@ -4,3 +4,6 @@ cache/
 .env.local
 *.log
 .DS_Store
+
+# Local permission grants can capture command text, including secrets.
+.claude/settings.local.json

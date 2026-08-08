@@ -1,5 +1,7 @@
 'use strict';
 
+require('./lib/env').load();
+
 const express = require('express');
 const toolsRouter = require('./routes/tools');
 const ctx = require('./lib/contextClient');

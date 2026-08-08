@@ -8,11 +8,16 @@ already airborne, already at a gate, or about to leave home for an airport they 
 go to.
 
 **The pain:** the information that decides their next hour lives as prose on
-`emirates.com/help/travel-updates` — a page that says things like *"customers transiting
-through Dubai with final destination Beirut will not be accepted for travel at their point
-of origin."* That sentence is the difference between going to the airport and not. It is
-buried in a wall of similar sentences, it changes through the day, and it is unreadable on a
-phone in a crowded terminal. The call-centre queue during a disruption is measured in hours.
+`emirates.com/help/travel-updates`. As of 8 August 2026 that page says the UAE will not
+allow entry to travellers who have recently been in the DRC, Uganda or South Sudan — *"unless
+the traveller has been outside of these countries for more than 21 days"* — and that the
+restriction *"applies to all travellers, even those arriving by indirect routings."*
+
+Those two sentences decide whether a passenger flying Kampala→Dubai→London should get in a
+taxi. They are buried in a wall of unrelated updates about lounge refurbishments and Schengen
+biometrics, the carve-out that saves the journey is a subordinate clause, and none of it is
+readable on a phone in a crowded terminal. The call-centre queue during a disruption is
+measured in hours.
 
 **Why voice:** the caller's hands are full and their eyes are on a departure board. They ask
 one question — *"am I going to get there?"* — and it is a question about live data, not
@@ -42,20 +47,33 @@ Caller ──speech──> ElevenLabs Conversational Agent
                   (prose → structured)
 ```
 
-**Data flow for the core question.** Caller says *"I'm flying Mumbai to Beirut via Dubai."*
-The agent calls `transit_rules` with `{origin: "Mumbai", final_destination: "Beirut"}`. The
-backend asks context.dev to scrape the Emirates travel-updates page to Markdown (8s
-timeout). `advisory.js` splits that Markdown into sentences, keeps the ones naming Beirut or
-BEY, and tests them against a transit-block pattern. It returns
-`{transit_allowed: false, explanation: "...", source: "live"}`. The agent speaks the
-explanation and, because transit is blocked, chains straight into `rebooking_options`.
+**Data flow for the core question.** Caller says *"I'm flying Kampala to London via Dubai."*
+The agent calls `transit_rules` with `{origin: "Uganda", final_destination: "London"}`. The
+backend asks context.dev to scrape the Emirates travel-updates page to Markdown (12s
+timeout, ~0.7s warm). `advisory.js` splits that Markdown into sentences and checks **both
+sides of the journey**: nothing restricts London, but the sentences naming Uganda match an
+entry-restriction pattern *and* sit next to transit language. It returns
+`{transit_allowed: false, conditional: true, explanation: "...", source: "live"}`. The agent
+speaks the explanation including the 21-day carve-out, then chains into `rebooking_options`.
 
 **The parsing layer is the substance.** context.dev gives us clean Markdown; turning airline
-advisory prose into a boolean is our problem. `advisory.js` does alias resolution (Beirut ↔
-BEY ↔ OLBA), sentence-window matching — a qualifier like *"this has been extended"* sits in
-the sentence *after* the one naming the route, so a single-sentence match misses it —
-suspension-vs-resumption disambiguation, and date extraction from both ISO and
-*"10 August 2026"* forms.
+advisory prose into a decision is our problem. Four things `advisory.js` gets right that a
+naive keyword match does not:
+
+- **Origin-side restrictions.** Transit can be blocked by where you have *been*, not where
+  you are going. Checking only the destination — the obvious implementation — returns
+  "you're fine" to the Kampala passenger. We check both sides.
+- **Sentence windows.** The qualifier that changes the answer (*"until further notice"*,
+  *"this has been extended"*) sits in a neighbouring sentence, so we read one sentence either
+  side of every match.
+- **Effective-from is not until.** *"effective 6 June 2026 (until further notice)"* contains
+  a date that is not an end date. We return `open_ended: true` and `suspended_until: null`
+  rather than confidently telling a passenger the restriction lifted in June.
+- **Alias resolution.** Callers say "DRC", "the Congo", "Kampala"; the page says "Democratic
+  Republic of Congo" and "Uganda". We map across city, IATA, ICAO and country-name variants.
+
+We also distinguish a **route suspension** from an **entry restriction** — both block travel,
+but the passenger's next action differs, so `restriction_type` carries which one it is.
 
 **Failure is a first-class path.** Every source call returns `{data, source}` where source
 is `live | cache | none`, and that value is propagated all the way into the agent's phrasing.
@@ -73,10 +91,12 @@ is a plain REST API we could test with `curl`, independent of the voice layer.
 
 **context.dev.** Emirates publishes no disruption API. The data we need is a rendered web
 page, and the naive alternative — `fetch` plus an HTML parser — breaks on client-side
-rendering and on any markup change. context.dev's scrape-to-Markdown endpoint gives clean,
-prose-shaped text from a single authenticated GET, which is exactly the input a sentence-level
-parser wants. Its `maxAgeMs` edge cache also cut our p50 latency enough to stay inside the
-tool timeout comfortably.
+rendering and on any markup change. context.dev's scrape-to-Markdown endpoint
+(`GET /v1/web/scrape/markdown`) gives clean, prose-shaped text from a single authenticated
+call, which is exactly the input a sentence-level parser wants: it strips the nav, the
+cookie banner and the footer, and leaves us sentences. `useMainContentOnly` and the
+`maxAgeMs` edge cache together took a cold 5–8s scrape down to ~0.7s warm, which is the
+difference between a conversation and an awkward pause.
 
 **Devin.** Used to parallelise the mechanical half of the build — the restructure from a
 single `index.js` into `src/routes`, `src/lib`, `src/data`, plus the deployment scaffolding
@@ -101,7 +121,8 @@ Cuts, made deliberately:
 - **Heuristic parsing, not an LLM extraction pass.** A second LLM call per tool would have
   cost 2–4 seconds against a 20-second budget and introduced its own failure mode. Regex over
   sentences is testable offline, runs in microseconds, and its failure mode is "no match",
-  which we already handle.
+  which we already handle. It is also the reason we can pin the parser with unit tests
+  against verbatim advisory text — an LLM extractor would make those tests flaky.
 - **Static data for policy, schedules and turnaround.** These are genuinely slow-changing.
   Spending live-data effort on them would have bought nothing.
 
@@ -110,13 +131,19 @@ prompt. The 19-test suite runs with the API key blank and the cache cleared — 
 path is the one we tested hardest, because a demo that dies on venue wifi scores zero
 regardless of what it does when the network is up.
 
-**Honest limits.** `flight_status`, `rebooking_options`, `policy_lookup` and
-`turnaround_brief` serve static data with a live cross-check layered on top —
-`flight_status` attempts a live scrape and adds a `live_note`, `rebooking_options` checks
-the live advisory for a route suspension, `turnaround_brief` attaches a live METAR. Only
-`disruption_status`, `transit_rules` and `stranded_support` are live-first end to end, and
-`weather_ops` reads live METAR. The `source` field on every response says which you got. We
-would rather state that than claim eight live integrations.
+**Honest limits.** Four tools are live-first: `disruption_status`, `transit_rules` and
+`stranded_support` read the Emirates advisory through context.dev, and `weather_ops` reads
+aviationweather.gov METAR. The other four serve static data with a live cross-check layered
+on top — `flight_status` attempts a live scrape and adds a `live_note`, `rebooking_options`
+checks the live advisory before offering seats, `turnaround_brief` attaches a live METAR,
+and `policy_lookup` is entirely static because entitlements genuinely do not change hourly.
+The `source` field on every response says which you got, verifiably.
+
+One caveat we will not paper over: `stranded_support` is live-capable but currently returns
+`source: "baseline"`, because today's advisory page happens to contain no hotel or voucher
+language to extract. The live path is exercised and correct; there is simply nothing there
+to find right now. That is the honest state of it, and the fallback text is good guidance
+regardless.
 
 ## 05 — Extensibility — v2
 

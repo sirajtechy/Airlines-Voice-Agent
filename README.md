@@ -1,9 +1,12 @@
 # IROPS Copilot
 
-A voice-first flight-disruption copilot. You call it, say *"I'm connecting through Dubai to
-Beirut tomorrow — am I going to get there?"*, and it reads the Emirates travel-updates page
-**at that moment** and tells you the truth: the route is suspended, transit passengers are
-not being accepted, here is what to do instead.
+A voice-first flight-disruption copilot. You call it, say *"I'm flying from Uganda to London
+through Dubai — am I going to get there?"*, and it reads the Emirates travel-updates page
+**at that moment** and tells you the truth: there is a live UAE entry restriction, it
+applies to indirect routings, and here is the one condition that would let you travel.
+
+That answer is not in any database. It exists as a sentence on a web page that changed on
+6 June and will change again.
 
 Built for the BUiD Voice Agents Hackathon, Dubai — 8 August 2026.
 
@@ -15,10 +18,16 @@ Built for the BUiD Voice Agents Hackathon, Dubai — 8 August 2026.
 
 ## What it does
 
-During irregular operations — a suspended route, a regional airspace closure, a cancelled
-flight — the information a passenger needs changes hourly and lives in prose on an airline's
+During irregular operations — a suspended route, an entry restriction, a cancelled flight —
+the information a passenger needs changes without warning and lives as prose on an airline's
 travel-updates page. Nobody reads it standing at a departure board. IROPS Copilot puts that
 page behind a voice agent.
+
+As of 8 August 2026, the live page carries an Ebola-driven UAE entry restriction covering
+the Democratic Republic of Congo, Uganda and South Sudan, in force until further notice, and
+it explicitly applies to passengers arriving by indirect routings. A passenger flying
+Kampala→Dubai→London is affected even though neither their destination nor their airline is.
+That is the class of answer this agent gets right.
 
 The agent handles eight things: whether a route is suspended and until when, whether transit
 through Dubai to a given destination is being accepted, a specific flight's status and delay
@@ -120,23 +129,25 @@ All are `POST`, all take and return JSON, all respond `200`.
 
 | Tool | Input | Returns | Data source |
 | --- | --- | --- | --- |
-| `/tools/disruption_status` | `{ destination }` | `suspended`, `suspended_until`, `extended_before`, `advisory_text`, `source` | context.dev → emirates.com travel-updates |
-| `/tools/transit_rules` | `{ origin, final_destination }` | `transit_allowed`, `explanation`, `source` | context.dev → emirates.com travel-updates |
+| `/tools/disruption_status` | `{ destination }` | `blocked`, `restriction_type`, `suspended`, `suspended_until`, `open_ended`, `extended_before`, `advisory_text`, `source` | context.dev → emirates.com travel-updates |
+| `/tools/transit_rules` | `{ origin, final_destination }` | `transit_allowed`, `conditional`, `explanation`, `source` | context.dev → emirates.com travel-updates |
 | `/tools/stranded_support` | `{ location }` | `location`, `support_text`, `source` | context.dev, with static baseline |
 | `/tools/flight_status` | `{ flight_no }` | full flight record, `live_note`, `source` | context.dev → Emirates flight status, mock fallback |
 | `/tools/weather_ops` | `{ airport }` | `metar`, `wind`, `ops_impact`, `source` | aviationweather.gov METAR (keyless) |
-| `/tools/rebooking_options` | `{ flight_no? , destination? }` | `options[]`, `route_suspended`, `advice`, `source` | Static schedule + live suspension cross-check |
+| `/tools/rebooking_options` | `{ flight_no? , destination? }` | `options[]`, `route_blocked`, `advice`, `source` | Static schedule + live advisory cross-check |
 | `/tools/policy_lookup` | `{ topic }` | `summary`, `source_hint` | Static policy baseline |
 | `/tools/turnaround_brief` | `{ flight_no }` | stand, ground time, critical path, `risks[]`, station weather | Static brief + live METAR |
 
 Plus: `GET /` (liveness string), `GET /healthz` (`ok`, `cache_entries`, `uptime_s`),
 `POST /admin/warm` (re-prime the cache before a demo).
 
-Try one:
+Try the live path:
 
 ```bash
-curl -s -X POST http://localhost:3000/tools/disruption_status -H 'content-type: application/json' -d '{"destination":"Beirut"}'
+curl -s -X POST http://localhost:3000/tools/transit_rules -H 'content-type: application/json' -d '{"origin":"Uganda","final_destination":"London"}'
 ```
+
+If `"source"` comes back `"live"`, context.dev is wired up correctly.
 
 ---
 
@@ -165,8 +176,9 @@ Two things in the prompt do real work:
 
 An ElevenLabs tool call that fails leaves the agent silent mid-conversation. So:
 
-- **8-second outbound timeout** via `AbortController`, against a 20-second ElevenLabs
-  budget — a slow scrape can never hang the call.
+- **12-second outbound timeout** via `AbortController`, against a 20-second ElevenLabs
+  budget — a slow scrape can never hang the call. A cold scrape measures ~5–8s, a warm one
+  ~0.7s, so the cache is what keeps the demo conversational.
 - **Never a bare 500.** Every handler is wrapped so any throw becomes
   `200 {"status":"degraded","message":"<spoken-friendly sentence>"}`, which the agent reads
   aloud gracefully.
@@ -175,8 +187,9 @@ An ElevenLabs tool call that fails leaves the agent silent mid-conversation. So:
 - **Static fallback** (`src/data/mocks.js`) so the demo survives total internet loss.
 
 `npm test` runs the whole suite with `CONTEXT_DEV_API_KEY` blank and the cache cleared —
-19 tests asserting every endpoint still returns 200, still carries a spoken message, and
-still comes in under the timeout budget.
+25 tests asserting every endpoint still returns 200, still carries a spoken message, and
+still comes in under the timeout budget. Six of those pin the parser against a verbatim
+excerpt of the live advisory page, so a regression in the prose handling fails the build.
 
 ---
 
