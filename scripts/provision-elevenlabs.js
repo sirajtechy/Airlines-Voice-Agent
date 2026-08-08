@@ -320,6 +320,56 @@ function buildAgentConfig({ systemPrompt, firstMessage }, toolIds, mcpServerIds)
       },
     },
     platform_settings: {
+      // Native guardrails, evaluated by ElevenLabs outside the LLM — they hold
+      // even if a jailbreak gets past the prompt. `focus` is the out-of-scope
+      // enforcement; `medical_and_legal_information` stays OFF deliberately,
+      // because entry requirements and visa rules ARE legal information and
+      // that filter would block the product's core job.
+      guardrails: {
+        version: '1',
+        focus: { is_enabled: true },
+        prompt_injection: { is_enabled: true },
+        content: {
+          // Blocking, because the retry action demands it — and retry is the
+          // only acceptable action here. The alternative, end_call, hangs up
+          // on a stressed passenger for tripping a filter. The evaluator is a
+          // fast small model; the latency is worth not dropping calls.
+          execution_mode: 'blocking',
+          config: {
+            sexual: { is_enabled: true, threshold: 0.3 },
+            violence: { is_enabled: true, threshold: 0.3 },
+            harassment: { is_enabled: true, threshold: 0.3 },
+            self_harm: { is_enabled: true, threshold: 0.3 },
+            profanity: { is_enabled: true, threshold: 0.5 },
+            religion_or_politics: { is_enabled: true, threshold: 0.3 },
+          },
+          trigger_action: { type: 'retry' },
+        },
+        custom: {
+          config: {
+            configs: [
+              {
+                name: 'sensitive-data',
+                prompt:
+                  'Block any reply that asks for, confirms, or repeats sensitive personal or financial data: full payment card numbers, CVV codes, passwords, one-time passcodes, bank account or IBAN numbers, or full passport numbers. A booking reference and a flight number are the only identifiers this assistant ever needs. Replies that tell the caller NOT to share such data are allowed.',
+                is_enabled: true,
+                execution_mode: 'blocking',
+                history_message_count: 1,
+                trigger_action: { type: 'retry' },
+              },
+              {
+                name: 'border-evasion',
+                prompt:
+                  'Block any reply that helps evade immigration or border controls, conceal recent travel history from authorities, falsify or alter travel documents, or smuggle goods or people. Explaining published entry rules, restrictions and exemptions is allowed and is the assistant\'s job.',
+                is_enabled: true,
+                execution_mode: 'blocking',
+                history_message_count: 1,
+                trigger_action: { type: 'retry' },
+              },
+            ],
+          },
+        },
+      },
       // Scored automatically on every call, so demo failures are measurable
       // rather than anecdotal.
       evaluation_criteria: [

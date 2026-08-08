@@ -396,7 +396,8 @@ Everything built, in the order it was earned. Each row is verifiable in the comm
 | 11 | Native **MCP server** at `/mcp` + 2 tracking tools | The registry MCPs are stdio-only and unattachable; we host the capability class ourselves on licensed data |
 | 12 | Request coalescing | 3 parallel identical scrapes = 1 request; found when a 12-tool burst blew the 10 req/min limit |
 | 13 | Agent behavioural hardening | Simulation caught it fabricating an all-clear from a stubbed tool and caving to repeated questions — both now forbidden and pinned |
-| 14 | ElevenLabs to the fullest | ASR keyword boosting, eager turns, tool-call sounds, end_call, language detection, post-call evaluation criteria + data collection |
+| 14 | Two-layer guardrails, adversarially verified | Native platform guardrails (focus, injection, content, two custom rules) *plus* prompt rules. `medical_and_legal_information` deliberately off — visa rules **are** legal information |
+| 15 | ElevenLabs to the fullest | ASR keyword boosting, eager turns, tool-call sounds, end_call, language detection, post-call evaluation criteria + data collection |
 
 ---
 
