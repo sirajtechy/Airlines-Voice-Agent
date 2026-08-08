@@ -84,6 +84,17 @@ never a 500, because a failed tool call is a voice agent going silent mid-senten
 
 ## 03 — Tool rationale
 
+**ElevenLabs — both integration paths.** Twelve webhook tools carry the
+schedule-and-policy questions, and a native MCP server (served by the same backend at
+`/mcp`, streamable HTTP) carries the physical-world ones: `track_aircraft` and
+`airspace_snapshot` from live ADS-B. The MCP route was built after evaluating the public
+flight-tracking MCP packages — stdio-only, unattachable to ElevenLabs, two needing paid
+keys — so we host the capability class ourselves on ODbL-licensed adsb.lol data. ASR
+keyword boosting covers callsigns and the restriction-list countries (a misheard "Kampala"
+fails the alias lookup and returns a wrong all-clear), turn-taking is eager, tool calls play
+a typing sound instead of dead air, and every call is scored post-hoc against three
+evaluation criteria: answered-not-stalled, sourced-honestly, gave-next-action.
+
 **ElevenLabs Conversational Agents.** We needed barge-in more than we needed voice quality.
 A stressed caller interrupts — they cut in with their flight number three words into the
 greeting — and an agent that talks over them is unusable. ElevenLabs gives us interruption

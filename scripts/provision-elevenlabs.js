@@ -183,32 +183,49 @@ async function upsertMcpServer() {
     return 'dry-run-mcp';
   }
 
-  const existing = await api('GET', '/convai/mcp-servers');
-  const match = (existing.mcp_servers || []).find(
-    (s) => (s.config?.name || s.name) === MCP_SERVER_NAME
-  );
-  if (match) {
-    const id = match.id || match.mcp_server_id;
-    console.log(`\n  found MCP server  ${MCP_SERVER_NAME}  (${id})`);
-    return id;
-  }
+  // MCP integrations are gated per workspace ("Actions & Integrations" in the
+  // dashboard security settings). If the gate is closed, say so loudly and
+  // carry on — losing two tracking tools must not block the agent update that
+  // carries the prompt and the other twelve tools.
+  try {
+    const existing = await api('GET', '/convai/mcp-servers');
+    const match = (existing.mcp_servers || []).find(
+      (s) => (s.config?.name || s.name) === MCP_SERVER_NAME
+    );
+    if (match) {
+      const id = match.id || match.mcp_server_id;
+      console.log(`\n  found MCP server  ${MCP_SERVER_NAME}  (${id})`);
+      return id;
+    }
 
-  const created = await api('POST', '/convai/mcp-servers', {
-    config: {
-      name: MCP_SERVER_NAME,
-      url: `${backendUrl}/mcp`,
-      transport: 'STREAMABLE_HTTP',
-      approval_policy: 'auto_approve_all',
-      description:
-        'Live ADS-B flight tracking: aircraft position by flight number, and a live snapshot of traffic around an airport.',
-      tool_call_sound: 'typing',
-      tool_call_sound_behavior: 'always',
-      response_timeout_secs: 20,
-    },
-  });
-  const id = created.id || created.mcp_server_id;
-  console.log(`\n  created MCP server  ${MCP_SERVER_NAME}  (${id})`);
-  return id;
+    const created = await api('POST', '/convai/mcp-servers', {
+      config: {
+        name: MCP_SERVER_NAME,
+        url: `${backendUrl}/mcp`,
+        transport: 'STREAMABLE_HTTP',
+        approval_policy: 'auto_approve_all',
+        description:
+          'Live ADS-B flight tracking: aircraft position by flight number, and a live snapshot of traffic around an airport.',
+        tool_call_sound: 'typing',
+        tool_call_sound_behavior: 'always',
+        response_timeout_secs: 20,
+      },
+    });
+    const id = created.id || created.mcp_server_id;
+    console.log(`\n  created MCP server  ${MCP_SERVER_NAME}  (${id})`);
+    return id;
+  } catch (err) {
+    if (/mcp_servers_disabled|does not have access to MCP/i.test(err.message)) {
+      console.log(
+        '\n  !! MCP servers are disabled for this workspace.\n' +
+          '     Enable them at elevenlabs.io -> Conversational AI -> Settings ->\n' +
+          '     MCP servers / Integrations, then re-run this script.\n' +
+          '     Continuing without the tracking tools.'
+      );
+      return null;
+    }
+    throw err;
+  }
 }
 
 function buildAgentConfig({ systemPrompt, firstMessage }, toolIds, mcpServerIds) {
@@ -344,7 +361,8 @@ async function main() {
 
   const toolIds = await upsertTools(toolConfigs);
   const mcpServerId = await upsertMcpServer();
-  const agentId = await upsertAgent(buildAgentConfig(prompt, toolIds, [mcpServerId]));
+  const mcpServerIds = mcpServerId ? [mcpServerId] : [];
+  const agentId = await upsertAgent(buildAgentConfig(prompt, toolIds, mcpServerIds));
 
   if (agentId) {
     console.log(`\n  Talk to it: https://elevenlabs.io/app/conversational-ai/agents/${agentId}\n`);

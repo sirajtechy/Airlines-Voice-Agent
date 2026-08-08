@@ -177,6 +177,17 @@ The system prompt, voice settings, and all twelve tool definitions are in
 copy-pasteable into the dashboard, and [`elevenlabs/tools/*.json`](elevenlabs/tools/) mirror
 the webhook tool shape field-for-field.
 
+The agent also has a native **MCP server** attached — the backend serves the Model Context
+Protocol at `/mcp` (streamable HTTP, JSON-RPC), and ElevenLabs connects to it directly and
+discovers two live flight-tracking tools: `track_aircraft` and `airspace_snapshot`. We
+evaluated the public flight-tracking MCPs (airplanes-live-mcp, google-flights-api,
+Flight-Search-MCP-Server) first: all three are stdio packages built for desktop clients,
+which ElevenLabs cannot attach to (it consumes MCP by hosted https URL), two need paid API
+keys, and airplanes.live's terms are non-commercial. Hosting the capability ourselves on
+adsb.lol (ODbL) gave the same tools, licensed, in the process we already run. Webhooks
+answer schedule-and-policy questions; MCP answers physical-world ones — the agent uses both
+ElevenLabs integration paths side by side.
+
 You do not have to paste any of it by hand. The repo is the source of truth and
 [`scripts/provision-elevenlabs.js`](scripts/provision-elevenlabs.js) pushes it up:
 
@@ -247,6 +258,8 @@ carries a `source` field, so you can verify each row yourself rather than trusti
 | `recent_changes` | **Yes** | context.dev Monitor pushes advisory changes to our webhook | — |
 | `travel_intel` | **Yes** | context.dev web search over airline/government domains | — |
 | `journey_brief` | **Partly** | All five checks it fans out are live | The PNR-to-itinerary lookup only (`booking_source: "demo_booking"`) |
+| `track_aircraft` (MCP) | **Yes** | ADS-B transponder fix via adsb.lol | — |
+| `airspace_snapshot` (MCP) | **Yes** | Live traffic within 100nm of an airport | — |
 
 Things we deliberately do **not** claim:
 
