@@ -28,7 +28,9 @@ Team: **Siraj · Astha · Farman** — BUiD Voice Agents Hackathon, Dubai, 8 Aug
 - **[docs/architecture.md](docs/architecture.md)** — layer-by-layer walkthrough + sequence diagram
 - **[docs/question-bank.md](docs/question-bank.md)** — every question RAAHI answers + guardrail test results
 - **[docs/demo-script.md](docs/demo-script.md)** — demo run sheet
-- **[docs/assets/](docs/assets/)** — rendered diagrams (PNG/SVG) + QR code
+- **[docs/RAAHI-loom-deck.pptx](docs/RAAHI-loom-deck.pptx)** — 11-slide deck, speaker notes on
+  every slide, regenerable via `python3 scripts/build-deck.py`
+- **[docs/assets/](docs/assets/)** — logo, QR code, rendered diagrams (PNG/SVG)
 
 ## 3 · Pre-flight checklist — do these in order
 
@@ -53,6 +55,10 @@ curl -s -X POST https://irops-copilot-backend.onrender.com/tools/journey_brief \
 - [ ] Screen-record at 1080p; test audio levels for 5 seconds first
 
 ## 4 · Loom video script — 3 minutes
+
+Slide deck: **[docs/RAAHI-loom-deck.pptx](docs/RAAHI-loom-deck.pptx)** — 11 slides, each with
+speaker notes matching the beats below. Slides 9 and 10 (reliability, bugs found) are reserve
+material for judge questions rather than the 3-minute cut.
 
 Record in **four takes** and stitch, or straight through. Timings are targets, not rules.
 

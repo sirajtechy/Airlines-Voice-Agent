@@ -152,48 +152,97 @@ a slightly stale answer. See [Reliability](#reliability-design) below.
 
 ## Setup
 
-Assumes a clean machine with **Node 18 or newer** (`node -v` to check).
+Assumes **Node 18 or newer** (`node -v`). No database, no Docker, no build step.
 
 ```bash
-git clone https://github.com/sirajtechy/irops-copilot-backend.git
-cd irops-copilot-backend
+git clone https://github.com/sirajtechy/Airlines-Voice-Agent.git
+cd Airlines-Voice-Agent
 npm install
-cp .env.example .env
+cp .env.example .env          # then set CONTEXT_DEV_API_KEY
+npm start                     # http://localhost:3000, warms cache on boot
+npm test                      # 58 tests, deliberately run with NO api key
 ```
 
-Open `.env` and set your context.dev API key (free tier is enough — sign up at
-<https://context.dev>):
-
-```
-CONTEXT_DEV_API_KEY=your_key_here
-```
-
-Run it:
+Get a free context.dev key at <https://context.dev>. Without it the server still
+starts and every endpoint still answers — from cache or static data, labelled as such.
 
 ```bash
-npm start
-```
-
-The server listens on `http://localhost:3000` and warms its cache on boot. Check it:
-
-```bash
-curl http://localhost:3000/healthz
-```
-
-Run the test suite (it deliberately runs with **no** API key, to prove the offline path):
-
-```bash
-npm test
+curl localhost:3000/healthz                      # cache state, advisory age, key present
+open  http://localhost:3000/talk                 # the RAAHI web/mobile UI
 ```
 
 ### Environment variables
 
+Runtime — read by the server:
+
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `CONTEXT_DEV_API_KEY` | For live data | — | context.dev bearer token. Without it every endpoint still answers, from cache or mock. |
-| `PORT` | No | `3000` | Render injects this. |
-| `TOOL_SHARED_SECRET` | No | *(off)* | If set, `/tools/*` and `/admin/*` require an `x-tool-secret` header. |
-| `FETCH_TIMEOUT_MS` | No | `8000` | Outbound fetch timeout. Keep well under the ElevenLabs 20s tool timeout. |
+| `CONTEXT_DEV_API_KEY` | for live data | — | context.dev bearer token |
+| `PORT` | no | `3000` | Render injects this |
+| `TOOL_SHARED_SECRET` | no | *(off)* | If set, `/tools/*` and `/admin/*` require an `x-tool-secret` header |
+| `CONTEXT_WEBHOOK_SECRET` | for monitors | *(off)* | HMAC secret for `/webhooks/context`. Printed by `setup-monitor.js`; unset means deliveries are accepted unverified |
+| `FETCH_TIMEOUT_MS` | no | `12000` | context.dev scrape budget. Must stay under the ElevenLabs 20s tool timeout |
+| `SEARCH_TIMEOUT_MS` | no | `10000` | `travel_intel` search budget |
+| `ADSB_TIMEOUT_MS` | no | `6000` | adsb.lol budget. Enrichment only, so deliberately shortest |
+| `CACHE_REFRESH_MS` | no | `300000` | Background advisory re-warm. `0` disables |
+| `ELEVENLABS_AGENT_ID` | no | *(baked in)* | Agent embedded by `/talk` |
+| `PUBLIC_BASE_URL` | no | request host | Used to build the `/qr` target |
+
+Scripts only — never needed by the server:
+
+| Variable | Used by | Purpose |
+| --- | --- | --- |
+| `ELEVENLABS_API_KEY` | `provision-elevenlabs.js` | Creates/updates tools, MCP server and agent |
+| `BACKEND_URL` | both scripts | Public https base every tool URL is rewritten to |
+| `AGENT_NAME` / `AGENT_LLM` / `ELEVENLABS_VOICE_ID` | `provision-elevenlabs.js` | Override agent name, LLM, voice |
+| `MONITOR_FREQUENCY_MINUTES` | `setup-monitor.js` | Monitor interval (API floor is 10) |
+
+### Provisioning the voice agent
+
+The repo is the source of truth; both scripts are idempotent and safe to re-run.
+
+```bash
+# 1 · Create/update the 12 webhook tools, the MCP server, and the agent
+ELEVENLABS_API_KEY=... BACKEND_URL=https://<your-host> \
+  node scripts/provision-elevenlabs.js --dry-run     # inspect first
+ELEVENLABS_API_KEY=... BACKEND_URL=https://<your-host> \
+  node scripts/provision-elevenlabs.js
+
+# 2 · Point a context.dev Monitor at the advisory page (prints the webhook secret)
+BACKEND_URL=https://<your-host> node scripts/setup-monitor.js
+#    …then set CONTEXT_WEBHOOK_SECRET on the backend and redeploy
+node scripts/setup-monitor.js --list     # inspect
+node scripts/setup-monitor.js --delete   # tear down
+
+# 3 · Rebuild the demo deck after any number changes
+python3 scripts/build-deck.py            # needs: pip install python-pptx
+```
+
+If MCP is disabled on the workspace the script says so and continues — losing two
+tracking tools must not block the agent update carrying the other twelve.
+
+---
+
+## Tech, services and tools
+
+| Layer | What we used | Why |
+| --- | --- | --- |
+| **Voice** | ElevenLabs Conversational AI — `claude-sonnet-5`, `eleven_multilingual_v2` TTS | Barge-in, STT, tool-calling and TTS as one configured object. Multilingual v2 is the only multilingual model the API accepts for an English-default agent |
+| **Tool transport** | 12 ElevenLabs **webhook tools** + 1 native **MCP server** | Both integration paths, side by side: webhooks for schedule/policy, MCP for physical-world queries |
+| **Live web data** | **context.dev** — `scrape/markdown`, `web/search`, `monitors` (+ `scrape/html` evaluated) | No airline publishes a disruption API. Scrape-to-Markdown is exactly the input a sentence parser wants; monitors turn polling into push |
+| **Live aircraft** | **adsb.lol** ADS-B (keyless, ODbL) | The only genuinely live flight signal available without a commercial contract |
+| **Weather** | **aviationweather.gov** METAR (keyless) | Authoritative station observations, no key |
+| **Runtime** | Node 18+, Express 4 | Global `fetch`/`AbortController`; two dependencies total (`express`, `node-fetch`) |
+| **Hosting** | **Render** free tier, `render.yaml` config-as-code | Permanent HTTPS URL for judges; deployed and env-managed over the Render API |
+| **Storage** | JSON on disk + memory mirror | No schema, no provisioning; survives a read-only filesystem |
+| **Tests** | `node --test` (58 tests) | Zero test dependencies; runs with the API key blank |
+| **Docs** | Mermaid (GitHub-rendered) + pre-rendered PNG/SVG | Judges see diagrams rendered; a video editor gets image files |
+| **Deck** | `python-pptx`, generated by script | The deck is regenerable when a number changes, so it cannot silently disagree with the README |
+| **Repo hygiene** | Secrets in `.env` only, gitignored; history scanned | No key has ever been committed |
+
+**Deliberately not used:** no database, no ORM, no frontend framework (the `/talk` page is
+~10 lines of vanilla JS), no LLM extraction pass in the parser, no auth flow. Each of those
+is justified in [TECH-SPEC §04](TECH-SPEC.md).
 
 ---
 
@@ -272,7 +321,7 @@ ELEVENLABS_API_KEY=... BACKEND_URL=https://<your-render-url> \
 It creates or updates one webhook tool per JSON file — rewriting every URL to `BACKEND_URL`,
 so a stale host cannot survive a redeploy — extracts the system prompt and first message
 from `agent-prompt.md`, and creates or updates the agent. It matches on name, so it is
-idempotent and safe to re-run after any edit. Re-pointing nine tools by hand is nine chances
+idempotent and safe to re-run after any edit. Re-pointing twelve tools by hand is twelve chances
 to miss one, and a tool left on a dead URL fails silently mid-conversation.
 
 Two things in the prompt do real work:
@@ -303,8 +352,8 @@ An ElevenLabs tool call that fails leaves the agent silent mid-conversation. So:
 - **Static fallback** (`src/data/mocks.js`) so the demo survives total internet loss.
 
 `npm test` runs the whole suite with `CONTEXT_DEV_API_KEY` blank and the cache cleared —
-42 tests asserting every endpoint still returns 200, still carries a spoken message, and
-still comes in under the timeout budget. Fourteen of those pin the parsers against verbatim
+58 tests asserting every endpoint still returns 200, still carries a spoken message, and
+still comes in under the timeout budget. Twenty-two of those pin the parsers and guardrails against verbatim
 excerpts of the live advisory page, so a regression in the prose handling fails the build
 rather than the demo.
 
@@ -368,17 +417,39 @@ Then, in ElevenLabs, run `scripts/provision-elevenlabs.js` to point all twelve t
 ## Project layout
 
 ```
-src/server.js            Express app, health, admin, error floor
-src/routes/tools.js      All 8 /tools/* handlers
-src/lib/contextClient.js context.dev wrapper — live → cache → none
-src/lib/adsb.js          adsb.lol live aircraft position (keyless)
-src/lib/cache.js         Disk + memory cache
-src/lib/advisory.js      Parses advisory prose into structured answers
-src/data/mocks.js        Static fallback: flights, policies, schedules
-test/                    19 tests, run with no network
-elevenlabs/              Agent prompt, voice settings, 12 tool definitions
-docs/demo-script.md      The three-question demo run
-TECH-SPEC.md             Engineering reasoning
+src/server.js              Express app · /healthz · /admin/warm · /webhooks/context
+                           · redacted logging · static /assets · error floor
+src/routes/tools.js        All 12 /tools/* handlers, safe() wrapper
+src/routes/mcp.js          MCP server — JSON-RPC over streamable HTTP, 2 live tools
+src/routes/talk.js         /talk web+mobile UI (EN/AR, RTL) and /qr slide
+
+src/lib/contextClient.js   context.dev — scrape · search · monitors
+                           live → cache → none, request coalescing, budgets
+src/lib/advisory.js        Advisory prose → structured decisions.  THE SUBSTANCE
+src/lib/liveSources.js     Question → which source answers it; search fallback
+src/lib/adsb.js            adsb.lol — aircraft position + airspace snapshot
+src/lib/changes.js         Monitor webhook verification + change ring buffer
+src/lib/guard.js           Log redaction (Luhn-checked) + injection defanging
+src/lib/cache.js           Disk (./cache) + memory mirror
+src/lib/env.js             Dependency-free .env loader; real env vars win
+
+src/data/sources.js        The live source registry (every URL scrape-verified)
+src/data/ekRoutes.js       ~330 Emirates flight numbers → route + typical fleet
+src/data/mocks.js          Static fallback: demo bookings, policies, aliases
+
+test/                      58 tests — tools · advisory · adsb · guard · mcp
+elevenlabs/                Agent prompt + 12 webhook tool definitions
+scripts/provision-elevenlabs.js   Idempotent agent/tool/MCP provisioning
+scripts/setup-monitor.js          Create/inspect/delete the context.dev monitor
+scripts/build-deck.py             Regenerates the demo deck
+
+SUBMISSION.md              Judge entry point: links, pre-flight, Loom script
+TECH-SPEC.md               Engineering reasoning and honest limits
+docs/architecture.md       Layer walkthrough + sequence diagram
+docs/question-bank.md      Every question RAAHI answers + guardrail test results
+docs/demo-script.md        The demo run sheet
+docs/RAAHI-loom-deck.pptx  11-slide deck (generated)
+docs/assets/               Logo, QR, rendered diagrams (PNG + SVG)
 ```
 
 ---
@@ -403,7 +474,11 @@ Everything built, in the order it was earned. Each row is verifiable in the comm
 | 12 | Request coalescing | 3 parallel identical scrapes = 1 request; found when a 12-tool burst blew the 10 req/min limit |
 | 13 | Agent behavioural hardening | Simulation caught it fabricating an all-clear from a stubbed tool and caving to repeated questions — both now forbidden and pinned |
 | 14 | Two-layer guardrails, adversarially verified | Native platform guardrails (focus, injection, content, two custom rules) *plus* prompt rules. `medical_and_legal_information` deliberately off — visa rules **are** legal information |
-| 15 | ElevenLabs to the fullest | ASR keyword boosting, eager turns, tool-call sounds, end_call, language detection, post-call evaluation criteria + data collection |
+| 15 | ~330 EK flight numbers → route + typical fleet | Route knowledge is stable public fact; today's schedule is a Cirium contract. Labelled `route_map`, and a test pins that no gate or delay is ever fabricated |
+| 16 | Backend guardrails | Log redaction (Luhn-checked so ticket numbers survive) and injection defanging on scraped prose. Writing that test found a window bug that could flip *blocked* → *allowed* |
+| 17 | Arabic + Hindi | Language presets, native first messages, Arabic ASR keywords, and the honesty hedges translated so "I could not verify" survives the language switch |
+| 18 | Emirates-themed web/mobile UI + QR | `/talk` and `/qr`, EN/AR with true RTL, logo lockup, and an explicit "independent prototype, not affiliated" line |
+| 19 | ElevenLabs to the fullest | ASR keyword boosting, eager turns, tool-call sounds, end_call, language detection, post-call evaluation criteria + data collection |
 
 ---
 

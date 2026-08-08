@@ -170,6 +170,47 @@ today's advisory page happens to contain no hotel or voucher language to extract
 path is exercised and correct; there is simply nothing there to find right now. That is the
 honest state of it, and the fallback text is good guidance regardless.
 
+## 04b — What we actually built
+
+Fourteen tools across two ElevenLabs integration paths, four context.dev capabilities, two
+keyless live feeds, and three guardrail layers. In dependency order rather than build order:
+
+**Data access.** `contextClient` wraps context.dev with a per-source time budget, a
+`live → cache → none` contract, and single-flight coalescing — three concurrent requests for
+the same URL become one, which matters on a 10-request-per-minute free tier and was found
+when a twelve-tool burst returned 429s. `adsb.js` wraps adsb.lol; `cache.js` is JSON on disk
+mirrored in memory so a read-only filesystem cannot break it, re-warmed on a background
+timer so a served `cache` answer is minutes old at worst and `/healthz` exposes its age.
+
+**Intelligence.** `advisory.js` turns prose into decisions and is the substance of the
+project — two-sided matching, sentence windows, main-clause classification, effective-from
+versus until, alias resolution. `liveSources.js` routes a question to a configured source or,
+failing that, to context.dev search over three allowlisted official domains. `changes.js`
+verifies monitor webhooks and holds detected changes. `guard.js` redacts logs and defangs
+injection in untrusted scraped text.
+
+**Surfaces.** Twelve webhook tools under `/tools/*`; an MCP server at `/mcp` speaking
+JSON-RPC over streamable HTTP with two live tracking tools; `/webhooks/context` receiving
+signed change pushes; `/talk` and `/qr` as the bilingual audience-facing UI.
+
+**Orchestration.** `journey_brief` is the product in one call: a booking reference resolves
+to an itinerary, five live checks fan out with `allSettled` (1.98s measured versus ~5s
+serial), and the results collapse under a precedence order — refused-at-the-gate outranks a
+closed destination, which outranks paperwork.
+
+**Provisioning as code.** The agent, its twelve tools and the MCP server are created and
+updated by `scripts/provision-elevenlabs.js`, which rewrites every tool URL from
+`BACKEND_URL` and matches on name — including previous names, so renaming the agent updated
+it rather than orphaning it. The monitor is created by `scripts/setup-monitor.js`. Both are
+idempotent. Twelve tools re-pointed by hand is twelve chances to miss one, and a tool left on
+a dead URL fails silently mid-conversation.
+
+**Verification.** 58 tests run with the API key blank and the cache cleared, because the
+offline path is the one a venue's wifi will exercise. Beyond unit tests, the agent itself was
+tested adversarially through conversation simulation, which is how we found it fabricating an
+all-clear from an unreadable tool result, caving to a repeated question, and — while writing
+an injection test — a sentence-window bug that could flip a real restriction to "allowed".
+
 ## 05 — Extensibility — v2
 
 1. **More advisory sources, same parser.** The sentence-window matcher is source-agnostic.
