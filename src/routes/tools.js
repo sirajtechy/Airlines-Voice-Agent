@@ -128,7 +128,7 @@ router.post(
           destination_city: route.destination_city,
           typical_aircraft: route.aircraft,
           status: adsbResult.position ? 'In flight' : 'Scheduled service',
-          summary: `${normFlightNo(flightNo)} is the Emirates service from ${route.origin_city} to ${route.destination_city}, typically a ${route.aircraft}.${adsbResult.position ? '' : ' I do not have live departure times or gates for it.'}`,
+          summary: `${normFlightNo(flightNo)} is the Emirates service from ${route.origin_city} to ${route.destination_city}, typically operated by the ${route.aircraft}.${adsbResult.position ? '' : ' I do not have live departure times or gates for it.'}`,
           live_note,
           live_position: adsbResult.position || null,
           airborne,
