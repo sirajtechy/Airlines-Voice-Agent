@@ -158,7 +158,9 @@ function buildAgentConfig({ systemPrompt, firstMessage }, toolIds) {
       },
       tts: {
         voice_id: VOICE_ID,
-        model_id: 'eleven_flash_v2_5',
+        // Must be the v2 (not v2.5) flash/turbo model: the API rejects an
+        // English-locked agent on any other, and flash is the low-latency one.
+        model_id: 'eleven_flash_v2',
         // Slightly slow and fairly stable: flight numbers and dates have to
         // land first time over a bad line in a loud terminal.
         stability: 0.55,
