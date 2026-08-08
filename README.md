@@ -29,13 +29,16 @@ it explicitly applies to passengers arriving by indirect routings. A passenger f
 Kampala→Dubai→London is affected even though neither their destination nor their airline is.
 That is the class of answer this agent gets right.
 
-The agent handles eight things: whether a route is suspended and until when, whether transit
-through Dubai to a given destination is being accepted, a specific flight's status and delay
-reason, current airport weather and its operational impact, rebooking options, passenger
-entitlements, stranded-passenger support, and a staff-facing turnaround brief.
+The agent handles nine things: whether a route is suspended and until when, whether transit
+through Dubai to a given destination is being accepted, what entry paperwork the EU and UK
+now demand, a specific flight's schedule and where the aircraft physically is, current
+airport weather and its operational impact, rebooking options, passenger entitlements,
+stranded-passenger support, and a staff-facing turnaround brief.
 
-Every one of those is a live tool call. The agent is instructed never to answer route or
-weather questions from memory.
+Five of the nine read live data on every call; the rest serve static data with a live
+cross-check layered on top. Which one you got is in the `source` field of every response —
+see [What is actually live](#what-is-actually-live). The agent is instructed never to answer
+route or weather questions from memory.
 
 ---
 
@@ -49,23 +52,23 @@ weather questions from memory.
   │  ElevenLabs Conversational│   STT → LLM (tool-calling) → TTS
   │  Agent                    │   interruption handling, voice design
   └───────────┬──────────────┘
-              │  HTTPS POST, 8 webhook tools, 20s timeout
+              │  HTTPS POST, 9 webhook tools, 20s timeout
               ▼
   ┌──────────────────────────┐
   │  IROPS backend (Express)  │   src/server.js
-  │  /tools/* — 8 endpoints   │   src/routes/tools.js
+  │  /tools/* — 9 endpoints   │   src/routes/tools.js
   └───────────┬──────────────┘
               │
       ┌───────┴────────┬──────────────────┐
       ▼                ▼                  ▼
- context.dev      aviationweather    disk + memory cache
- scrape→Markdown   .gov METAR         src/lib/cache.js
-      │                │                  │
-      ▼                ▼                  ▼
- emirates.com     OMDB observation   last good response
- /travel-updates                            │
-      │                                     ▼
-      └──── parsed by src/lib/advisory.js ──┴──> mock fallback
+ context.dev    aviationweather  adsb.lol   disk + memory cache
+ scrape→Markdown  .gov METAR      ADS-B      src/lib/cache.js
+      │               │              │             │
+      ▼               ▼              ▼             ▼
+ emirates.com    OMDB observation  live      last good response
+ /travel-updates                   aircraft        │
+      │                            position        ▼
+      └── parsed by advisory.js ──┴────────────┴──> mock fallback
                                                  src/data/mocks.js
 ```
 
@@ -123,7 +126,7 @@ npm test
 
 ---
 
-## The eight tools
+## The nine tools
 
 All are `POST`, all take and return JSON, all respond `200`.
 
@@ -132,14 +135,23 @@ All are `POST`, all take and return JSON, all respond `200`.
 | `/tools/disruption_status` | `{ destination }` | `blocked`, `restriction_type`, `suspended`, `suspended_until`, `open_ended`, `extended_before`, `advisory_text`, `source` | context.dev → emirates.com travel-updates |
 | `/tools/transit_rules` | `{ origin, final_destination }` | `transit_allowed`, `conditional`, `explanation`, `source` | context.dev → emirates.com travel-updates |
 | `/tools/stranded_support` | `{ location }` | `location`, `support_text`, `source` | context.dev, with static baseline |
-| `/tools/flight_status` | `{ flight_no }` | full flight record, `live_note`, `source` | context.dev → Emirates flight status, mock fallback |
+| `/tools/flight_status` | `{ flight_no }` | flight record, `live_position`, `airborne`, `live_note`, `schedule_source`, `position_source` | **Schedule: static.** **Position: live ADS-B via adsb.lol.** See note below |
 | `/tools/weather_ops` | `{ airport }` | `metar`, `wind`, `ops_impact`, `source` | aviationweather.gov METAR (keyless) |
 | `/tools/rebooking_options` | `{ flight_no? , destination? }` | `options[]`, `route_blocked`, `advice`, `source` | Static schedule + live advisory cross-check |
 | `/tools/policy_lookup` | `{ topic }` | `summary`, `source_hint` | Static policy baseline |
 | `/tools/turnaround_brief` | `{ flight_no }` | stand, ground time, critical path, `risks[]`, station weather | Static brief + live METAR |
+| `/tools/entry_requirements` | `{ destination }` | `region`, `applies`, `action_required`, `requirements[]`, `exemptions[]`, `summary`, `last_updated`, `source` | context.dev → emirates.com EU/UK sections |
 
-Plus: `GET /` (liveness string), `GET /healthz` (`ok`, `cache_entries`, `uptime_s`),
-`POST /admin/warm` (re-prime the cache before a demo).
+`flight_status` is the one tool that mixes two feeds, so it carries two source fields.
+`schedule_source` is always `mock` — no keyless source publishes gate numbers or delay
+minutes, and we do not pretend otherwise. `position_source` is a genuine live transponder
+fix from [adsb.lol](https://adsb.lol) (ODbL). ADS-B can tell you an aircraft is at 37,000
+feet and descending; it cannot tell you a flight is cancelled, and `airborne: false` means
+"not tracked in the air" — not departed, or out of receiver coverage — never "cancelled".
+
+Plus: `GET /` (liveness string), `GET /healthz` (`ok`, `cache_entries`, `advisory_cached_at`,
+`advisory_age_s`, `cache_refresh_ms`, `uptime_s`), `POST /admin/warm` (re-prime the cache
+before a demo).
 
 Try the live path:
 
@@ -153,11 +165,11 @@ If `"source"` comes back `"live"`, context.dev is wired up correctly.
 
 ## How the voice agent calls it
 
-The ElevenLabs agent is configured with eight **webhook tools**, one per endpoint. Each
+The ElevenLabs agent is configured with nine **webhook tools**, one per endpoint. Each
 posts JSON to `https://<your-render-url>/tools/<name>` with a 20-second timeout, and the
 agent reads the returned fields aloud.
 
-The system prompt, voice settings, and all eight tool definitions are in
+The system prompt, voice settings, and all nine tool definitions are in
 [`elevenlabs/`](elevenlabs/) — [`agent-prompt.md`](elevenlabs/agent-prompt.md) is
 copy-pasteable into the dashboard, and [`elevenlabs/tools/*.json`](elevenlabs/tools/) mirror
 the webhook tool shape field-for-field.
@@ -183,13 +195,46 @@ An ElevenLabs tool call that fails leaves the agent silent mid-conversation. So:
   `200 {"status":"degraded","message":"<spoken-friendly sentence>"}`, which the agent reads
   aloud gracefully.
 - **Two-layer cache** (`src/lib/cache.js`): disk under `./cache`, mirrored in memory so a
-  read-only filesystem doesn't break it. Warmed on boot and via `POST /admin/warm`.
+  read-only filesystem doesn't break it. Warmed on boot, refreshed on a 5-minute background
+  timer, and re-primeable via `POST /admin/warm`. The timer bounds how stale a served
+  `source: "cache"` answer can be, which is what makes the `cached_at` we report defensible;
+  `/healthz` exposes `advisory_age_s` so you can check it rather than take our word.
 - **Static fallback** (`src/data/mocks.js`) so the demo survives total internet loss.
 
 `npm test` runs the whole suite with `CONTEXT_DEV_API_KEY` blank and the cache cleared —
-25 tests asserting every endpoint still returns 200, still carries a spoken message, and
-still comes in under the timeout budget. Six of those pin the parser against a verbatim
-excerpt of the live advisory page, so a regression in the prose handling fails the build.
+42 tests asserting every endpoint still returns 200, still carries a spoken message, and
+still comes in under the timeout budget. Fourteen of those pin the parsers against verbatim
+excerpts of the live advisory page, so a regression in the prose handling fails the build
+rather than the demo.
+
+---
+
+## What is actually live
+
+The brief penalises claiming more than you built, so here is the exact split. Every response
+carries a `source` field, so you can verify each row yourself rather than trusting the table.
+
+| Tool | Live on every call? | What is live | What is static |
+| --- | --- | --- | --- |
+| `disruption_status` | **Yes** | Emirates travel-updates page via context.dev | — |
+| `transit_rules` | **Yes** | Emirates travel-updates page via context.dev | — |
+| `entry_requirements` | **Yes** | EU EES + UK ETA sections of the same page | — |
+| `weather_ops` | **Yes** | aviationweather.gov METAR | — |
+| `stranded_support` | Live-capable | Reads the live page for hotel/voucher language | Falls back to a static baseline — and today's page has no such language, so it returns `source: "baseline"` |
+| `flight_status` | **Partly** | Aircraft position from adsb.lol ADS-B (`position_source`) | Schedule, gate, delay, cancellation (`schedule_source: "mock"`) |
+| `rebooking_options` | Cross-check | Live advisory decides `route_blocked` | The seats themselves |
+| `turnaround_brief` | Cross-check | Live METAR for the station | The brief itself |
+| `policy_lookup` | No | — | Entirely static; entitlements genuinely do not change hourly |
+
+Things we deliberately do **not** claim:
+
+- **No real booking or PNR integration.** The agent says so out loud when asked.
+- **No live gate, delay or cancellation feed.** Those need a commercial contract (Cirium,
+  FlightAware). We tried the keyless options; ADS-B gives position, not schedule, and we
+  label it as position.
+- **No mid-conversation invalidation.** We re-fetch per tool call. If the advisory changes
+  while someone is mid-sentence, they will not hear about it until the next tool call.
+- **No streaming.** Request/response webhooks only.
 
 ---
 
@@ -203,7 +248,7 @@ The repo carries a [`render.yaml`](render.yaml), so Render configures itself:
 3. In the dashboard, set `CONTEXT_DEV_API_KEY` (marked `sync: false`, so it is not in git).
 4. Deploy. Your URL will be `https://irops-copilot-backend.onrender.com`.
 
-Then, in ElevenLabs, point all eight tools at the Render URL and **re-Publish the agent**.
+Then, in ElevenLabs, point all nine tools at the Render URL and **re-Publish the agent**.
 
 > Render's free tier sleeps after inactivity and takes ~30s to wake. Hit `/healthz` and
 > `POST /admin/warm` a minute before demoing.
@@ -216,11 +261,12 @@ Then, in ElevenLabs, point all eight tools at the Render URL and **re-Publish th
 src/server.js            Express app, health, admin, error floor
 src/routes/tools.js      All 8 /tools/* handlers
 src/lib/contextClient.js context.dev wrapper — live → cache → none
+src/lib/adsb.js          adsb.lol live aircraft position (keyless)
 src/lib/cache.js         Disk + memory cache
 src/lib/advisory.js      Parses advisory prose into structured answers
 src/data/mocks.js        Static fallback: flights, policies, schedules
 test/                    19 tests, run with no network
-elevenlabs/              Agent prompt, voice settings, 8 tool definitions
+elevenlabs/              Agent prompt, voice settings, 9 tool definitions
 docs/demo-script.md      The three-question demo run
 TECH-SPEC.md             Engineering reasoning
 ```

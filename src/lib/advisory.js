@@ -6,15 +6,36 @@
  * mention the destination, then classify them.
  */
 
-const { cityToIata, airports, countryAliases } = require('../data/mocks');
+const {
+  cityToIata,
+  airports,
+  countryAliases,
+  destinationRegions,
+  regionSections,
+} = require('../data/mocks');
 
-/** Split markdown into sentence-ish chunks, stripping markdown noise. */
+/**
+ * Split markdown into sentence-ish chunks, stripping markdown noise.
+ *
+ * Block boundaries are split before punctuation is considered, because plenty
+ * of advisory lines carry no terminal full stop — headings, list items, and
+ * stamps like "Last updated: 8 January 2026, 05:44 Dubai (GMT+4)". Collapsing
+ * the whole document to one string first glues those to the paragraph below,
+ * producing a Frankenstein sentence whose opening clause belongs to a heading.
+ * That mattered: it hid the UK ETA requirement behind a stray "do not need".
+ */
 function sentences(markdown) {
   return String(markdown)
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // unwrap links
-    .replace(/[#*_>`|]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .split(/(?<=[.!?])\s+/)
+    .split(/\n{2,}|\n(?=\s*[-*+]\s)|\n(?=#{1,6}\s)/) // paragraph / list / heading
+    .flatMap((block) =>
+      block
+        .replace(/^\s*[-*+]\s+/, '') // list bullet — the agent would read it aloud
+        .replace(/[#*_>`|]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .split(/(?<=[.!?])\s+/)
+    )
     .map((s) => s.trim())
     .filter(Boolean);
 }
@@ -261,10 +282,162 @@ function parseSupportText(markdown, location) {
   return truncate(picked.join(' '), 600);
 }
 
+// ---------------------------------------------------------------------------
+// Entry requirements (EU Entry/Exit System, UK ETA and eVisas)
+// ---------------------------------------------------------------------------
+
+// The page uses non-breaking hyphens and NBSPs inside "non‑EU", "long‑stay",
+// "90 days". Left alone they defeat every \b word boundary below.
+function normaliseDashes(text) {
+  return String(text).replace(/[\u2010\u2011\u2012\u2013\u2014]/g, '-').replace(/\u00a0/g, ' ');
+}
+
+/** A requirement the passenger has to act on before they fly. */
+const OBLIGATION_RE = /\b(you will need|you must|you should|need to|will need to|should take action|are required|cannot legally travel|will not be able to board|applies to you|please allow extra time|make sure)\b/i;
+/** Carve-outs. Worth separating: "not affected" is the sentence that ends the call happily. */
+const EXEMPTION_RE = /\b(are not affected|not affected|do not need|does not need|will not need|are exempt|exempt from|no longer need|not required)\b/i;
+const LAST_UPDATED_RE = /last updated:\s*([^\n]+)/i;
+
+/**
+ * Drop a leading "If ..., " conditional so classification reads the main clause.
+ *
+ * "If you do not need a visa to visit the UK for short stays, you will need an
+ * Electronic Travel Authorisation." The negation lives in the condition; the
+ * obligation lives in the main clause. Testing the whole sentence files the
+ * single most important UK requirement as an exemption and the agent tells the
+ * passenger they need nothing — which is how someone gets denied boarding.
+ */
+function mainClause(sentence) {
+  return sentence.replace(/^if\b[^,]*,\s*/i, '');
+}
+
+/**
+ * Split scraped Markdown on `##` headings into { heading, body } sections.
+ * Entry requirements are documentation, not bulletins — the governing scope is
+ * the heading, so a sentence window (right for disruption bulletins) would drag
+ * in unrelated blocs. We section first, then read sentences within the section.
+ */
+function sections(markdown) {
+  const text = normaliseDashes(markdown || '');
+  const out = [];
+  const parts = text.split(/^##\s+/m);
+  for (const part of parts.slice(1)) {
+    const nl = part.indexOf('\n');
+    if (nl === -1) {
+      out.push({ heading: part.trim(), body: '' });
+      continue;
+    }
+    out.push({ heading: part.slice(0, nl).trim(), body: part.slice(nl + 1).trim() });
+  }
+  return out;
+}
+
+/**
+ * Entry requirements for a destination, read out of the region section that
+ * governs it.
+ *
+ * Distinct from `parseDisruption`: a disruption blocks you, a requirement is
+ * paperwork you can still satisfy. Conflating them would have the agent tell a
+ * passenger flying to Munich that they cannot travel, when in fact they need to
+ * register for EES. So `blocked` is never set here — the caller gets
+ * `action_required` instead.
+ *
+ * @returns {{destination:string, region:string|null, region_label:string|null,
+ *            applies:boolean, action_required:boolean, requirements:string[],
+ *            exemptions:string[], summary:string, last_updated:string|null,
+ *            matched:boolean}}
+ */
+function parseEntryRequirements(markdown, destination) {
+  const raw = String(destination || '').trim();
+  const lower = raw.toLowerCase();
+
+  // Resolve the destination to a bloc, trying the city/code and, failing that,
+  // the city behind an airport code ("LHR" -> "london" -> uk).
+  let region = destinationRegions[lower] || null;
+  if (!region) {
+    const asCode = raw.toUpperCase();
+    if (airports[asCode]) region = destinationRegions[airports[asCode].city.toLowerCase()] || null;
+  }
+  if (!region) {
+    for (const alias of aliasesFor(raw)) {
+      if (destinationRegions[alias]) {
+        region = destinationRegions[alias];
+        break;
+      }
+    }
+  }
+
+  const label = region ? regionSections[region].label : null;
+
+  if (!region) {
+    return {
+      destination: raw,
+      region: null,
+      region_label: null,
+      applies: false,
+      action_required: false,
+      requirements: [],
+      exemptions: [],
+      summary: `I do not have published entry requirements for ${raw || 'that destination'}. The ones I track are for the European Union and the United Kingdom.`,
+      last_updated: null,
+      matched: false,
+    };
+  }
+
+  const wanted = regionSections[region].headings;
+  const section = sections(markdown).find((s) =>
+    wanted.some((h) => s.heading.toLowerCase().includes(h))
+  );
+
+  if (!section || !section.body) {
+    return {
+      destination: raw,
+      region,
+      region_label: label,
+      applies: false,
+      action_required: false,
+      requirements: [],
+      exemptions: [],
+      summary: `I could not read the current entry requirements for ${label} from the live advisory just now. Check with the Emirates desk before you travel.`,
+      last_updated: null,
+      matched: false,
+    };
+  }
+
+  // Classify on the main clause, not the whole sentence — see mainClause().
+  const all = sentences(section.body);
+  const requirements = [];
+  const exemptions = [];
+  for (const s of all) {
+    const main = mainClause(s);
+    if (OBLIGATION_RE.test(main) && !EXEMPTION_RE.test(main)) requirements.push(truncate(s, 240));
+    else if (EXEMPTION_RE.test(main)) exemptions.push(truncate(s, 240));
+  }
+
+  const lastUpdated = section.body.match(LAST_UPDATED_RE);
+
+  return {
+    destination: raw,
+    region,
+    region_label: label,
+    applies: true,
+    action_required: requirements.length > 0,
+    requirements: requirements.slice(0, 4),
+    exemptions: exemptions.slice(0, 2),
+    summary: requirements.length
+      ? truncate(`There are entry requirements in force for ${label}. ${requirements[0]}`, 300)
+      : `Entry requirements for ${label} are published, but nothing in them requires action from you before departure.`,
+    last_updated: lastUpdated ? lastUpdated[1].trim() : null,
+    matched: true,
+  };
+}
+
 module.exports = {
   parseDisruption,
   parseTransitRules,
   parseSupportText,
+  parseEntryRequirements,
+  sections,
   sentences,
   aliasesFor,
   extractDate,

@@ -1,0 +1,25 @@
+{
+  "type": "webhook",
+  "name": "entry_requirements",
+  "description": "Check the paperwork a passenger needs before they fly to the European Union / Schengen Area or the United Kingdom — the EU Entry/Exit System (EES), UK Electronic Travel Authorisation (ETA) and eVisas. This is about documents, NOT about whether travel is blocked: use disruption_status for closures and transit_rules for connections. Call this whenever a caller names a European or UK destination and asks what they need, or mentions a passport, visa, ETA or biometrics.",
+  "response_timeout_secs": 20,
+  "api_schema": {
+    "url": "https://irops-copilot-backend.onrender.com/tools/entry_requirements",
+    "method": "POST",
+    "request_headers": {
+      "Content-Type": "application/json"
+    },
+    "request_body_schema": {
+      "type": "object",
+      "properties": {
+        "destination": {
+          "type": "string",
+          "description": "Destination country, city or airport code, e.g. 'London', 'LHR', 'Munich', 'Spain'"
+        }
+      },
+      "required": [
+        "destination"
+      ]
+    }
+  }
+}

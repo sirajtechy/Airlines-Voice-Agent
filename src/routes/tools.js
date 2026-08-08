@@ -2,6 +2,7 @@
 
 const express = require('express');
 const ctx = require('../lib/contextClient');
+const adsb = require('../lib/adsb');
 const advisory = require('../lib/advisory');
 const {
   flightDB,
@@ -97,31 +98,50 @@ router.post(
     }
 
     const flight = findFlight(flightNo);
+
+    // Live enrichment: where the aircraft physically is, from ADS-B.
+    //
+    // The schedule block (times, gate, delay, cancellation) is static — no
+    // keyless source publishes it, so `schedule_source` stays "mock" and we do
+    // not pretend otherwise. What IS live is the transponder position, reported
+    // separately under `position_source` so the two can never be conflated.
+    const adsbResult = await adsb.positionFor(flight?.flight_no || flightNo);
+    const airborne = adsbResult.source === 'live' ? Boolean(adsbResult.airborne) : null;
+    const live_note = adsb.speakablePosition(adsbResult);
+
+    // Unknown to the schedule table but visible on ADS-B: we can still answer
+    // usefully, and refusing would waste the one genuinely live signal we have.
     if (!flight) {
+      if (!adsbResult.position) {
+        return res.status(200).json({
+          status: 'degraded',
+          message: `I could not find flight ${flightNo} in today's schedule, and it is not showing on live tracking either. Could you read the flight number back to me?`,
+          source: 'none',
+        });
+      }
       return res.status(200).json({
-        status: 'degraded',
-        message: `I could not find flight ${flightNo} in today's schedule. Could you read the flight number back to me?`,
-        source: 'none',
+        flight_no: normFlightNo(flightNo),
+        status: 'In flight',
+        schedule_available: false,
+        live_note,
+        live_position: adsbResult.position,
+        airborne: true,
+        position_source: adsbResult.source,
+        schedule_source: 'none',
+        source: 'live',
       });
     }
 
-    // Live attempt: departure board for the origin, via context.dev.
-    let source = 'mock';
-    let live_note = null;
-    const scraped = await ctx.scrape(
-      `https://www.emirates.com/ae/english/manage-booking/flight-status/?flightNumber=${normFlightNo(flightNo)}`,
-      { useMainContentOnly: true }
-    );
-    if (scraped.data) {
-      source = scraped.source;
-      const hits = advisory
-        .sentences(scraped.data)
-        .filter((s) => /\b(delay|cancel|on time|departed|boarding|gate)\b/i.test(s))
-        .slice(0, 2);
-      if (hits.length) live_note = advisory.truncate(hits.join(' '), 240);
-    }
-
-    res.status(200).json({ ...flight, live_note, source });
+    res.status(200).json({
+      ...flight,
+      schedule_available: true,
+      live_note,
+      live_position: adsbResult.position || null,
+      airborne,
+      position_source: adsbResult.source,
+      schedule_source: 'mock',
+      source: 'mock',
+    });
   })
 );
 
@@ -324,6 +344,41 @@ router.post(
       location,
       support_text: live || strandedSupportBaseline,
       source: live ? scraped.source : 'baseline',
+    });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// 9. POST /tools/entry_requirements  { destination }
+// ---------------------------------------------------------------------------
+router.post(
+  '/entry_requirements',
+  safe('entry_requirements', async (req, res) => {
+    const destination = String(req.body?.destination || '').trim();
+    if (!destination) {
+      return res.status(200).json({
+        status: 'degraded',
+        message: 'Which country are you travelling to? I can check entry requirements for the European Union and the United Kingdom.',
+      });
+    }
+
+    const scraped = await ctx.scrape(EMIRATES_UPDATES);
+    const parsed = advisory.parseEntryRequirements(scraped.data, destination);
+
+    res.status(200).json({
+      destination,
+      region: parsed.region,
+      region_label: parsed.region_label,
+      applies: parsed.applies,
+      action_required: parsed.action_required,
+      requirements: parsed.requirements,
+      exemptions: parsed.exemptions,
+      summary: parsed.summary,
+      last_updated: parsed.last_updated,
+      // Paperwork, not a closed border. Stated explicitly so the agent never
+      // reads this tool as a travel ban.
+      blocks_travel: false,
+      source: parsed.matched ? scraped.source : 'none',
     });
   })
 );

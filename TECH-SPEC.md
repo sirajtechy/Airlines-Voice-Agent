@@ -30,7 +30,7 @@ scales past a queue that a call centre cannot.
 Caller ──speech──> ElevenLabs Conversational Agent
                      (STT, tool-calling LLM, TTS, barge-in)
                               │
-                    8 webhook tools, HTTPS POST, 20s timeout
+                    9 webhook tools, HTTPS POST, 20s timeout
                               ▼
                    Express backend (Render, Node 18)
                      src/routes/tools.js
@@ -39,6 +39,8 @@ Caller ──speech──> ElevenLabs Conversational Agent
               ▼               ▼                ▼
         context.dev     aviationweather   cache (disk+memory)
       scrape→Markdown    .gov METAR       src/lib/cache.js
+                         + adsb.lol       (5-min bg refresh)
+                         ADS-B position
               │               │                │
      emirates.com/       OMDB raw obs     last good scrape
      travel-updates                            │
@@ -127,36 +129,55 @@ Cuts, made deliberately:
   Spending live-data effort on them would have bought nothing.
 
 What we spent the time on instead: the degradation chain, the advisory parser, and the agent
-prompt. The 19-test suite runs with the API key blank and the cache cleared — the offline
+prompt. The 42-test suite runs with the API key blank and the cache cleared — the offline
 path is the one we tested hardest, because a demo that dies on venue wifi scores zero
 regardless of what it does when the network is up.
 
-**Honest limits.** Four tools are live-first: `disruption_status`, `transit_rules` and
-`stranded_support` read the Emirates advisory through context.dev, and `weather_ops` reads
-aviationweather.gov METAR. The other four serve static data with a live cross-check layered
-on top — `flight_status` attempts a live scrape and adds a `live_note`, `rebooking_options`
-checks the live advisory before offering seats, `turnaround_brief` attaches a live METAR,
-and `policy_lookup` is entirely static because entitlements genuinely do not change hourly.
-The `source` field on every response says which you got, verifiably.
+**Honest limits.** Five of the nine tools are live-first: `disruption_status`,
+`transit_rules`, `entry_requirements` and `stranded_support` read the Emirates advisory
+through context.dev, and `weather_ops` reads aviationweather.gov METAR. The rest serve
+static data with a live cross-check layered on top — `rebooking_options` checks the live
+advisory before offering seats, `turnaround_brief` attaches a live METAR, and
+`policy_lookup` is entirely static because entitlements genuinely do not change hourly. The
+`source` field on every response says which you got, verifiably.
 
-One caveat we will not paper over: `stranded_support` is live-capable but currently returns
-`source: "baseline"`, because today's advisory page happens to contain no hotel or voucher
-language to extract. The live path is exercised and correct; there is simply nothing there
-to find right now. That is the honest state of it, and the fallback text is good guidance
-regardless.
+Two caveats we will not paper over.
+
+`flight_status` mixes two feeds and reports them separately rather than averaging them into
+one comfortable claim. The aircraft position is genuinely live — a transponder fix from
+adsb.lol, keyless and ODbL-licensed, typically back in under a second. The schedule around
+it is not: no keyless source publishes gate numbers, delay minutes or cancellations, so
+`schedule_source` stays `"mock"` while `position_source` says `"live"`. We considered
+collapsing these into a single `source: "live"` and rejected it, because the live half would
+lend credibility to the static half — the precise overclaim the brief warns about. The
+distinction is load-bearing in the agent prompt too: `airborne: false` means "not tracked in
+the air", which is not departed *or* out of receiver coverage, and the agent is explicitly
+forbidden from reading it as a cancellation.
+
+`stranded_support` is live-capable but currently returns `source: "baseline"`, because
+today's advisory page happens to contain no hotel or voucher language to extract. The live
+path is exercised and correct; there is simply nothing there to find right now. That is the
+honest state of it, and the fallback text is good guidance regardless.
 
 ## 05 — Extensibility — v2
 
 1. **More advisory sources, same parser.** The sentence-window matcher is source-agnostic.
    Point it at GCAA notices, destination-country entry rules, and other carriers' update
-   pages and the same eight tools get materially better with no interface change.
+   pages and the same nine tools get materially better with no interface change.
+   `entry_requirements` is the proof: it reads the EU EES and UK ETA sections of a page we
+   were already scraping, and cost an alias table plus a section splitter.
 2. **Real flight status.** Swap the static `flightDB` for a Cirium or FlightAware feed
    behind the identical response contract — `src/data/mocks.js` becomes the fallback rather
-   than the primary, and no ElevenLabs tool needs re-publishing.
-3. **Mid-conversation invalidation.** Today a scrape is cached for the turn. A background
-   poller on the advisory page could push a change into an active conversation, letting the
-   agent say *"that just changed while we were talking"* — which is the behaviour the
-   use-case actually wants and the thing we could not fit in six hours.
+   than the primary, `schedule_source` starts reporting `"live"`, and no ElevenLabs tool
+   needs re-publishing. The ADS-B position layer already added in `src/lib/adsb.js` stays as
+   it is; the two feeds are deliberately independent.
+3. **Mid-conversation invalidation.** We now refresh the advisory cache on a five-minute
+   background timer, so served data is minutes old at worst — but that is a freshness
+   guarantee, not a push. Nothing reaches a conversation that is already in flight; the
+   agent only learns of a change on its next tool call. Closing that gap means holding
+   conversation state and pushing an event into it, letting the agent say *"that just
+   changed while we were talking"*. That is the behaviour the use-case actually wants and
+   the thing we could not fit in six hours.
 4. **Outbound calls.** Invert it: when the advisory page changes for a route, the agent calls
    the affected passengers instead of waiting for them to call. Same tools, opposite
    direction.

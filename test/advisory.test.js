@@ -122,3 +122,93 @@ test('parsers tolerate null markdown', () => {
   assert.strictEqual(advisory.parseDisruption(null, 'Beirut').matched, false);
   assert.strictEqual(advisory.parseSupportText(null, 'Dubai'), null);
 });
+
+// ---------------------------------------------------------------------------
+// Entry requirements
+// ---------------------------------------------------------------------------
+
+/**
+ * Verbatim excerpt of the EU and UK sections of the Emirates travel-updates
+ * page as scraped on 8 August 2026, non-breaking hyphens included — those
+ * characters are real and they defeat naive word-boundary matching.
+ */
+const LIVE_ENTRY = `
+## Travel to the European Union
+
+Last updated: 22 April 2026, 08:04 Dubai (GMT+4)
+
+The European Union has introduced a new Entry/Exit System (EES) at Schengen borders. This system replaces the manual passport stamping process with a digital record of your entry and exit, including basic details and biometric data (such as fingerprints and a facial image).
+
+If you are a non\u2011EU/Schengen national travelling to or from the Schengen Area for a short stay (up to 90 days in any 180\u2011day period), the EES applies to you.
+
+EU citizens, Schengen residents, and those holding long\u2011stay visas or residence permits are not affected.
+
+Please allow extra time for border checks, especially on your first trip after the system goes live.
+
+## Travel requirements for the United Kingdom
+
+Last updated: 8 January 2026, 05:44 Dubai (GMT+4)
+
+If you do not need a visa to visit the UK for short stays of up to six months, you will need an Electronic Travel Authorisation (ETA). From 25 February 2026, eligible visitors without an ETA will not be able to board their transport and cannot legally travel to the UK.
+`;
+
+test('ENTRY: a subordinate "do not need" does not hide the ETA requirement', () => {
+  const r = advisory.parseEntryRequirements(LIVE_ENTRY, 'London');
+  assert.strictEqual(r.region, 'uk');
+  assert.strictEqual(r.action_required, true);
+  assert.match(r.requirements[0], /Electronic Travel Authorisation/i,
+    'the ETA sentence is a requirement — the negation is in the "if" clause, not the main clause');
+  assert.ok(
+    !r.exemptions.some((e) => /Electronic Travel Authorisation/i.test(e)),
+    'must never be filed as an exemption; that tells a passenger they need nothing'
+  );
+});
+
+test('ENTRY: a genuine carve-out is still read as an exemption', () => {
+  const r = advisory.parseEntryRequirements(LIVE_ENTRY, 'Paris');
+  assert.strictEqual(r.region, 'schengen');
+  assert.ok(r.exemptions.some((e) => /are not affected/i.test(e)));
+  assert.ok(
+    !r.requirements.some((s) => /are not affected/i.test(s)),
+    'an exemption must not be read back as an obligation'
+  );
+});
+
+test('ENTRY: routes cities and airport codes to the right bloc', () => {
+  for (const d of ['Munich', 'MAD', 'Amsterdam', 'Schengen']) {
+    assert.strictEqual(advisory.parseEntryRequirements(LIVE_ENTRY, d).region, 'schengen', d);
+  }
+  for (const d of ['LHR', 'Manchester', 'United Kingdom', 'London']) {
+    assert.strictEqual(advisory.parseEntryRequirements(LIVE_ENTRY, d).region, 'uk', d);
+  }
+});
+
+test('ENTRY: survives non-breaking hyphens in the source text', () => {
+  const r = advisory.parseEntryRequirements(LIVE_ENTRY, 'Paris');
+  assert.ok(r.requirements.some((s) => /non-EU\/Schengen national/i.test(s)),
+    'U+2011 must be normalised or the word boundaries never match');
+});
+
+test('ENTRY: entry requirements are paperwork, never a travel ban', () => {
+  const r = advisory.parseEntryRequirements(LIVE_ENTRY, 'Paris');
+  assert.strictEqual(r.applies, true);
+  // parseDisruption is the tool that decides "blocked". This one must not.
+  assert.ok(!('blocked' in r), 'entry requirements must not claim to block travel');
+});
+
+test('ENTRY: an untracked destination says so rather than guessing', () => {
+  const r = advisory.parseEntryRequirements(LIVE_ENTRY, 'Tokyo');
+  assert.strictEqual(r.matched, false);
+  assert.strictEqual(r.applies, false);
+  assert.match(r.summary, /do not have published entry requirements/i);
+});
+
+test('ENTRY: reports the section last-updated stamp', () => {
+  assert.match(advisory.parseEntryRequirements(LIVE_ENTRY, 'Paris').last_updated, /22 April 2026/);
+});
+
+test('ENTRY: tolerates null markdown', () => {
+  const r = advisory.parseEntryRequirements(null, 'London');
+  assert.strictEqual(r.matched, false);
+  assert.ok(r.summary.length > 0);
+});

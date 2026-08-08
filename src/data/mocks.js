@@ -161,9 +161,64 @@ const countryAliases = {
   dxb: ['dubai', 'uae', 'united arab emirates'],
 };
 
+/**
+ * Which advisory section governs a destination. The Emirates page organises
+ * entry requirements by bloc ("Travel to the European Union", "Travel
+ * requirements for the United Kingdom"), but callers name a city — "I'm going
+ * to Munich" has to reach the Schengen section. Keyed by anything a caller or
+ * a booking might say; values are the region key the parser looks up.
+ */
+const destinationRegions = {
+  // --- Schengen / EU ---
+  ...Object.fromEntries(
+    [
+      'austria', 'belgium', 'croatia', 'czechia', 'czech republic', 'denmark', 'estonia',
+      'finland', 'france', 'germany', 'greece', 'hungary', 'iceland', 'italy', 'latvia',
+      'liechtenstein', 'lithuania', 'luxembourg', 'malta', 'netherlands', 'holland', 'norway',
+      'poland', 'portugal', 'slovakia', 'slovenia', 'spain', 'sweden', 'switzerland',
+      'schengen', 'european union', 'eu', 'europe',
+      // Cities and airport codes Emirates serves in the zone.
+      'paris', 'cdg', 'munich', 'muc', 'frankfurt', 'fra', 'amsterdam', 'ams', 'madrid', 'mad',
+      'barcelona', 'bcn', 'rome', 'fco', 'milan', 'mxp', 'vienna', 'vie', 'zurich', 'zrh',
+      'geneva', 'gva', 'brussels', 'bru', 'lisbon', 'lis', 'athens', 'ath', 'prague', 'prg',
+      'budapest', 'bud', 'warsaw', 'waw', 'copenhagen', 'cph', 'stockholm', 'arn', 'oslo', 'osl',
+      'nice', 'lyon', 'hamburg', 'dusseldorf', 'dus', 'venice', 'vce', 'malaga', 'agp',
+      'bologna', 'blq', 'porto', 'opo', 'helsinki', 'hel',
+    ].map((k) => [k, 'schengen'])
+  ),
+
+  // --- United Kingdom ---
+  ...Object.fromEntries(
+    [
+      'uk', 'u.k.', 'united kingdom', 'britain', 'great britain', 'england', 'scotland',
+      'wales', 'northern ireland',
+      'london', 'lhr', 'lgw', 'stn', 'heathrow', 'gatwick', 'stansted',
+      'manchester', 'man', 'birmingham', 'bhx', 'glasgow', 'gla', 'edinburgh', 'edi',
+      'newcastle', 'ncl', 'bristol', 'brs',
+    ].map((k) => [k, 'uk'])
+  ),
+};
+
+/**
+ * Heading text that opens each region's section on the advisory page. Matched
+ * case-insensitively against `##` headings.
+ */
+const regionSections = {
+  schengen: {
+    label: 'the European Union / Schengen Area',
+    headings: ['travel to the european union', 'european union', 'schengen'],
+  },
+  uk: {
+    label: 'the United Kingdom',
+    headings: ['travel requirements for the united kingdom', 'united kingdom'],
+  },
+};
+
 module.exports = {
   flightDB,
   countryAliases,
+  destinationRegions,
+  regionSections,
   policies,
   rebookingOptions,
   turnaroundBriefs,

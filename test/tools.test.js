@@ -8,6 +8,10 @@
 
 process.env.CONTEXT_DEV_API_KEY = '';
 process.env.FETCH_TIMEOUT_MS = '1500';
+process.env.ADSB_TIMEOUT_MS = '1500';
+// The refresh timer would otherwise fire mid-suite and re-warm the cache the
+// offline assertions depend on being empty.
+process.env.CACHE_REFRESH_MS = '0';
 
 const { test, before, after } = require('node:test');
 const assert = require('node:assert');
@@ -46,6 +50,7 @@ const CASES = [
   ['/tools/disruption_status', { destination: 'Beirut' }, ['destination', 'suspended', 'advisory_text']],
   ['/tools/transit_rules', { origin: 'Mumbai', final_destination: 'Beirut' }, ['transit_allowed', 'explanation']],
   ['/tools/stranded_support', { location: 'Dubai' }, ['location', 'support_text']],
+  ['/tools/entry_requirements', { destination: 'London' }, ['destination', 'summary', 'source']],
 ];
 
 for (const [path, body, fields] of CASES) {
@@ -75,8 +80,22 @@ test('every tool responds well inside the ElevenLabs 20s timeout', async () => {
   }
 });
 
+test('flight_status never reports live data it does not have', async () => {
+  const { json } = await post('/tools/flight_status', { flight_no: 'EK17' });
+  if (json.status === 'degraded') return;
+  // The schedule block is static. Whatever happens to the ADS-B lookup, the
+  // schedule must never be labelled live — that is the overclaim we are
+  // guarding against.
+  assert.strictEqual(json.schedule_source, 'mock');
+  assert.ok(['live', 'none'].includes(json.position_source));
+  if (json.position_source === 'none') {
+    assert.strictEqual(json.live_position, null);
+    assert.strictEqual(json.airborne, null, 'a failed lookup is not proof of being on the ground');
+  }
+});
+
 test('missing required params degrade instead of crashing', async () => {
-  for (const path of ['/tools/flight_status', '/tools/disruption_status', '/tools/transit_rules']) {
+  for (const path of ['/tools/flight_status', '/tools/disruption_status', '/tools/transit_rules', '/tools/entry_requirements']) {
     const { status, json } = await post(path, {});
     assert.strictEqual(status, 200);
     assert.ok(json.status === 'degraded' || 'source' in json, `${path} should degrade on empty body`);

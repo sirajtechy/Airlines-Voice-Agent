@@ -44,9 +44,17 @@ app.use(['/tools', '/admin'], (req, res, next) => {
 app.get('/', (req, res) => res.type('text/plain').send('IROPS Copilot backend is running.'));
 
 app.get('/healthz', (req, res) => {
+  // Surface how stale the advisory actually is. "We cache" is only defensible
+  // if we can say by how much.
+  const advisoryEntry = cache.get(ctx.WARM_URLS[0]);
   res.status(200).json({
     ok: true,
     cache_entries: cache.count(),
+    advisory_cached_at: advisoryEntry?.cached_at || null,
+    advisory_age_s: advisoryEntry
+      ? Math.round((Date.now() - new Date(advisoryEntry.cached_at).getTime()) / 1000)
+      : null,
+    cache_refresh_ms: Number(process.env.CACHE_REFRESH_MS || 300000),
     uptime_s: Math.round((Date.now() - BOOTED_AT) / 1000),
     context_dev_key: Boolean((process.env.CONTEXT_DEV_API_KEY || '').trim()),
   });
@@ -80,6 +88,7 @@ if (require.main === module) {
       .warmCache()
       .then((w) => console.log('cache warmed', JSON.stringify(w)))
       .catch((e) => console.log('warm failed (non-fatal)', e.message));
+    ctx.startBackgroundRefresh();
   });
 }
 

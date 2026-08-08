@@ -114,4 +114,33 @@ async function warmCache(urls = WARM_URLS) {
   return warmed;
 }
 
-module.exports = { scrape, fetchText, warmCache, WARM_URLS, CONTEXT_API, TIMEOUT_MS };
+/**
+ * Keep the warm set fresh in the background.
+ *
+ * Without this, a served `source: "cache"` could be hours old and we would
+ * still be calling it current. Re-warming on a timer bounds staleness to the
+ * interval, which is what makes the `cached_at` we report defensible.
+ *
+ * `unref()` so the timer never holds the process open — tests and Ctrl-C must
+ * still exit cleanly.
+ */
+function startBackgroundRefresh(intervalMs = Number(process.env.CACHE_REFRESH_MS || 300000)) {
+  if (intervalMs <= 0) return null;
+  const timer = setInterval(() => {
+    warmCache()
+      .then((w) => console.log(`${new Date().toISOString()} cache refreshed ${JSON.stringify(w)}`))
+      .catch((e) => console.log(`${new Date().toISOString()} cache refresh failed (non-fatal) ${e.message}`));
+  }, intervalMs);
+  timer.unref();
+  return timer;
+}
+
+module.exports = {
+  scrape,
+  fetchText,
+  warmCache,
+  startBackgroundRefresh,
+  WARM_URLS,
+  CONTEXT_API,
+  TIMEOUT_MS,
+};
