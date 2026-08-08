@@ -1,0 +1,131 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>RAAHI — Loom Recording Cue Card</title>
+<style>
+  :root{--bg:#15181C;--card:#1D2228;--line:#2C3238;--amber:#E8A13D;--green:#5CB585;
+    --red:#DB8570;--ink:#EDEFF1;--mut:#AEB6BD;--faint:#7C858D}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif}
+  .page{max-width:860px;margin:0 auto;padding:28px 26px}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  h1{font-size:26px;margin:0 0 2px;letter-spacing:-.01em}
+  h1 span{color:var(--amber)}
+  .sub{color:var(--faint);font-size:12px;margin:0 0 18px}
+  h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);
+    margin:22px 0 8px;font-family:ui-monospace,Menlo,monospace}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 16px;margin:8px 0}
+  .say{border-left:3px solid var(--amber);padding:8px 14px;background:var(--card);
+    border-radius:0 8px 8px 0;margin:8px 0;font-size:15px}
+  .say b{color:var(--amber);font-family:ui-monospace,Menlo,monospace;font-size:11px;
+    letter-spacing:.08em;display:block;margin-bottom:2px}
+  .say.v{border-left-color:var(--green)}
+  .say.v b{color:var(--green)}
+  pre{background:#111417;border:1px solid var(--line);border-radius:8px;padding:10px 14px;
+    overflow-x:auto;font-size:12.5px;margin:8px 0;color:var(--green)}
+  pre .c{color:var(--faint)}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  td,th{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{color:var(--faint);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    font-family:ui-monospace,Menlo,monospace}
+  td.k{font-family:ui-monospace,Menlo,monospace;color:var(--amber);white-space:nowrap;font-weight:700}
+  .no{color:var(--red)} .ok{color:var(--green)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .t{font-family:ui-monospace,Menlo,monospace;color:var(--amber);font-weight:700;white-space:nowrap}
+  ul{margin:6px 0;padding-left:20px}li{margin:3px 0}
+  @media print{
+    body{background:#fff;color:#111}
+    :root{--bg:#fff;--card:#f4f5f6;--line:#ccc;--ink:#111;--mut:#333;--faint:#666;
+      --amber:#9a6110;--green:#2e6f4c;--red:#a03a28}
+    pre{background:#f4f5f6;color:#2e6f4c}
+    .pb{page-break-before:always}
+  }
+</style>
+
+<div class="page">
+  <h1><span>RAAHI</span> — Loom recording cue card</h1>
+  <p class="sub">Keep this on the second screen. Target 2:30–3:00. Resubmit any time before 2:30 PM GST — last one counts.</p>
+
+  <h2>0 · Ten minutes before — run these, in order</h2>
+  <pre><span class="c"># 1. wake Render (free tier sleeps ~30s) — want context_dev_key:true</span>
+curl -s https://irops-copilot-backend.onrender.com/healthz
+<span class="c"># 2. warm the cache — turns 5–8s cold scrapes into ~0.7s</span>
+curl -s -X POST https://irops-copilot-backend.onrender.com/admin/warm
+<span class="c"># 3. is the demo premise STILL live? want transit_allowed:false + source:"live"</span>
+curl -s -X POST https://irops-copilot-backend.onrender.com/tools/transit_rules \
+  -H 'content-type: application/json' -d '{"origin":"Uganda","final_destination":"London"}'</pre>
+  <div class="box">
+    <b>Screen setup:</b> Tab 1 — <span class="mono">…onrender.com/talk</span> (RAAHI, mic allowed).
+    Tab 2 — <span class="mono">emirates.com/ae/english/help/travel-updates</span>, pre-scrolled to the
+    <b>UAE entry restrictions</b> paragraph. Loom: camera bubble on, "anyone with the link".
+  </div>
+
+  <h2>1 · Demo PNRs — memorise these three</h2>
+  <table>
+    <tr><th>PNR</th><th>Journey</th><th>Verdict</th></tr>
+    <tr><td class="k">K7X2M9</td><td>Kampala → Dubai → London</td><td class="no">BLOCKED — origin-side entry restriction, 21-day carve-out</td></tr>
+    <tr><td class="k">P3L8QK</td><td>Mumbai → Dubai → London</td><td class="ok">CLEAR — same destination, opposite verdict</td></tr>
+    <tr><td class="k">T4B9RD</td><td>Dubai → Beirut</td><td class="no">ROUTE SUSPENDED</td></tr>
+  </table>
+
+  <h2>2 · The run — say exactly this</h2>
+
+  <p><span class="t">0:00–0:25 · Opener (face to camera)</span></p>
+  <div class="say v"><b>YOU SAY</b>"During a flight disruption, the answer a passenger needs is two sentences of prose buried on the airline's travel-updates page. It changes without warning, and nobody can read it standing in a terminal. This is RAAHI — a voice agent that reads that page at the moment you ask. Built today on ElevenLabs and context.dev."</div>
+
+  <p><span class="t">0:25–1:45 · Live demo — the segment that scores</span></p>
+  <div class="say"><b>ASK RAAHI</b>"My booking reference is K seven X two M nine — should I leave for the airport?"</div>
+  <div class="say v"><b>WHILE IT ANSWERS, SAY OVER IT</b>"That answer is not in any database. It just read the Emirates travel-updates page live through context.dev — and the restriction it found is on where she's <i>coming from</i>, not where she's going."</div>
+  <div class="box">→ <b>Switch to Tab 2.</b> Point at the exact sentence: <i>"…even those arriving by indirect routings."</i> Then back to Tab 1.</div>
+  <div class="say"><b>ASK (PROVES NOTHING IS HARDCODED)</b>"Now try P three L eight Q K."&nbsp; <span style="color:var(--faint)">→ same destination, opposite verdict — say so.</span></div>
+  <div class="say"><b>BARGE-IN — CUT IT OFF MID-SENTENCE</b>"— sorry, where is E K three-oh-five right now?"&nbsp; <span style="color:var(--faint)">→ live ADS-B position via the native MCP server. Name it: "that's a second integration path — a native MCP server, live transponder data."</span></div>
+  <div class="say"><b>ASK</b>"Has that advisory changed today?"&nbsp; <span style="color:var(--faint)">→ Monitor answer, minutes-ago precision.</span></div>
+
+  <p><span class="t">1:45–2:05 · Why live data (finish the sentence)</span></p>
+  <div class="say v"><b>YOU SAY</b>"Our project would fundamentally break without live web data because a restriction lifted yesterday and one extended this morning produce <i>opposite</i> advice — and neither has an API, only a page. And a context.dev Monitor watches that page and pushes signed diffs to us, so RAAHI can tell you it changed while you were talking to it."</div>
+
+  <p><span class="t">2:05–2:25 · What it does on its own</span></p>
+  <div class="say v"><b>YOU SAY</b>"It chains tools unprompted — restriction, then rebooking, then support. It checks both ends of a journey, because restrictions key off where you've been. It refuses to answer route questions from memory, and every response carries a freshness label that binds its phrasing. Twelve webhook tools plus a native MCP server, barge-in, and it switches to Arabic or Hindi mid-call."</div>
+
+  <p><span class="t">2:25–2:40 · Novel</span></p>
+  <div class="say v"><b>YOU SAY</b>"The knowledge source is the airline's own unstructured advisory prose, parsed live — checking the leg of the journey nobody checks. Not a booking bot, not an FAQ."</div>
+
+  <p><span class="t">2:40–2:55 · Hardest problem</span></p>
+  <div class="say v"><b>YOU SAY</b>"Turning that prose into a decision. Three things broke the naive version: the restriction keys off origin, not destination. The qualifier that changes the answer sits in the <i>next</i> sentence. And 'effective 6 June, until further notice' contains a date that is not an end date. Fixed with two-sided matching, sentence windows and open-ended detection — pinned by fifty tests against verbatim page text."</div>
+
+  <div class="pb"></div>
+  <h2>3 · If a beat stalls — backup questions that always land</h2>
+  <table>
+    <tr><th>Ask</th><th>Shows</th></tr>
+    <tr><td>"How busy is Dubai airspace right now?"</td><td>Live ADS-B count, MCP</td></tr>
+    <tr><td>"What do I need to enter the UK?"</td><td>gov.uk live — the ETA hidden in a subordinate clause</td></tr>
+    <tr><td>"What are the rules for Nigeria?"</td><td>Long tail: allowlisted web search, answered <i>with attribution</i></td></tr>
+    <tr><td>"Is weather a problem tonight?"</td><td>Live METAR decoded into ops impact</td></tr>
+    <tr><td>"I'm stuck overnight — what do I do?"</td><td>Chain into stranded support, Terminal 3 desk</td></tr>
+    <tr><td>Ask "so should I still go?" three times</td><td>Never softens — same answer, same words</td></tr>
+  </table>
+
+  <h2>4 · Say / never say</h2>
+  <div class="grid">
+    <div class="box"><b class="ok">SAY</b><ul>
+      <li>"live at the moment of the question"</li>
+      <li>"the schedule shows…" for gate/delay (it's demo data)</li>
+      <li>"the Monitor pushes signed changes to us" — this one is real</li>
+      <li>"every response labels its own freshness — you can curl it"</li>
+    </ul></div>
+    <div class="box"><b class="no">NEVER SAY</b><ul>
+      <li>"real-time" (say live-at-question)</li>
+      <li>"all fourteen tools are live" (four groups are hybrid/static)</li>
+      <li>"streaming" (unless meaning ElevenLabs audio)</li>
+      <li>gate numbers / departure times as live fact</li>
+    </ul></div>
+  </div>
+
+  <h2>5 · After recording — submission checklist</h2>
+  <div class="box"><ul>
+    <li>Loom link set to <b>"anyone with the link"</b> — open it in an incognito window to prove it</li>
+    <li>Repo public · README.md + TECH-SPEC.md at root · all commits inside 08:30–14:30 GST</li>
+    <li>Submit at <span class="mono">dubai-ai-hackathon.replit.app</span>: team number + repo URL + Loom URL</li>
+    <li>Notes field: mention Render free tier may need ~30s to wake on first hit</li>
+  </ul></div>
+</div>

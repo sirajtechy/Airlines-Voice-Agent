@@ -55,20 +55,18 @@ const THEME = `
     line-height: 1.55; -webkit-font-smoothing: antialiased;
   }
 
-  /* Top bar — Emirates' solid red band with a gold hairline under it. */
+  /* Top bar. The logo is dark red on white, so the band is white with the
+     Emirates red rule beneath it rather than a red fill the mark would vanish into. */
   header {
-    background: var(--ek-red); border-bottom: 3px solid var(--ek-gold);
-    padding: 15px 20px; display: flex; align-items: center; gap: 12px;
+    background: var(--surface); border-bottom: 3px solid var(--ek-red);
+    box-shadow: inset 0 -6px 0 -3px var(--ek-gold);
+    padding: 10px 18px; display: flex; align-items: center; gap: 11px;
   }
-  .wordmark {
-    color: #fff; font-size: 1.32rem; font-weight: 300;
-    letter-spacing: 0.26em; text-transform: uppercase;
-  }
-  .wordmark b { font-weight: 600; letter-spacing: 0.2em; }
+  header img { height: 46px; width: auto; display: block; }
   .badge {
-    margin-inline-start: auto; background: rgba(255,255,255,.16); color: #fff;
-    font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase;
-    padding: 5px 10px; border-radius: 3px; white-space: nowrap;
+    margin-inline-start: auto; background: #fdf2f3; color: var(--ek-red-dark);
+    border: 1px solid #f2d6d8; font-size: 0.62rem; letter-spacing: 0.14em;
+    text-transform: uppercase; padding: 5px 10px; border-radius: 3px; white-space: nowrap;
   }
 
   /* Hero */
@@ -76,6 +74,7 @@ const THEME = `
     background: var(--surface); border-bottom: 1px solid var(--line);
     padding: 30px 20px 26px; text-align: center;
   }
+  .hero-logo { width: min(210px, 52vw); height: auto; margin: 0 auto 14px; display: block; }
   .hero h1 {
     font-size: clamp(1.6rem, 5.6vw, 2.15rem); font-weight: 300;
     letter-spacing: -0.01em; margin-bottom: 8px;
@@ -173,7 +172,7 @@ const TOGGLE_SCRIPT = `
 
 const HEADER = `
   <header>
-    <span class="wordmark"><b>RAAHI</b></span>
+    <img src="/assets/raahi-mark.png" alt="RAAHI — your way forward">
     <span class="badge">Operations copilot</span>
   </header>`;
 
@@ -301,12 +300,14 @@ router.get('/talk', (req, res) => {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#d71921">
+<link rel="icon" type="image/png" href="/assets/favicon.png">
 <title>RAAHI — flight disruption copilot</title>
 <style>${THEME}</style>
 </head>
 <body>
 ${HEADER}
   <section class="hero">
+    <img class="hero-logo" src="/assets/raahi-logo.png" alt="RAAHI — your way forward">
     <h1>Your flight just changed. <b>Ask Raahi.</b></h1>
     <p>A voice copilot for flight disruptions — live route restrictions, transit rules and
        entry requirements, spoken in seconds.</p>
@@ -340,6 +341,7 @@ router.get('/qr', (req, res) => {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#d71921">
+<link rel="icon" type="image/png" href="/assets/favicon.png">
 <title>Scan to talk to RAAHI</title>
 <style>${THEME}
   .scan { flex: 1; display: flex; flex-direction: column; align-items: center;
@@ -353,7 +355,8 @@ router.get('/qr', (req, res) => {
 <body>
 ${HEADER}
   <div class="scan">
-    <h1 style="font-weight:300;font-size:1.7rem">Scan to talk to <b style="color:var(--ek-red);font-weight:600">RAAHI</b></h1>
+    <img src="/assets/raahi-logo.png" alt="RAAHI" style="width:min(230px,56vw);height:auto;margin-bottom:6px">
+    <h1 style="font-weight:300;font-size:1.5rem">Scan to talk to <b style="color:var(--ek-red);font-weight:600">RAAHI</b></h1>
     <p style="color:var(--ink-soft);font-size:0.93rem;max-width:40ch">
       No app needed — just a phone browser and a microphone.<br/>
       <span dir="rtl" lang="ar">لا حاجة لتطبيق — متصفح هاتف وميكروفون فقط</span></p>

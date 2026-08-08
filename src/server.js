@@ -112,6 +112,16 @@ app.post('/webhooks/context', (req, res) => {
   res.status(200).json({ ok: true, recorded: true, id: entry.id });
 });
 
+// Brand assets for /talk and /qr, served from the same folder the README
+// references so the logo exists exactly once in the repo.
+app.use(
+  '/assets',
+  express.static(require('path').join(__dirname, '..', 'docs', 'assets'), {
+    maxAge: '1h',
+    fallthrough: true,
+  })
+);
+
 app.use('/tools', toolsRouter);
 app.use('/mcp', require('./routes/mcp'));
 app.use('/', require('./routes/talk'));

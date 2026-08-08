@@ -1,4 +1,8 @@
-# RAAHI
+<p align="center">
+  <img src="docs/assets/raahi-logo.png" width="230" alt="RAAHI — your way forward">
+</p>
+
+# RAAHI — your way forward
 
 A voice-first flight-disruption copilot. You call it, say *"I'm flying from Uganda to London
 through Dubai — am I going to get there?"*, and it reads the Emirates travel-updates page
