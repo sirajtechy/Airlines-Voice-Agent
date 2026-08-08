@@ -174,6 +174,22 @@ The system prompt, voice settings, and all nine tool definitions are in
 copy-pasteable into the dashboard, and [`elevenlabs/tools/*.json`](elevenlabs/tools/) mirror
 the webhook tool shape field-for-field.
 
+You do not have to paste any of it by hand. The repo is the source of truth and
+[`scripts/provision-elevenlabs.js`](scripts/provision-elevenlabs.js) pushes it up:
+
+```bash
+ELEVENLABS_API_KEY=... BACKEND_URL=https://<your-render-url> \
+  node scripts/provision-elevenlabs.js --dry-run   # inspect first
+ELEVENLABS_API_KEY=... BACKEND_URL=https://<your-render-url> \
+  node scripts/provision-elevenlabs.js
+```
+
+It creates or updates one webhook tool per JSON file — rewriting every URL to `BACKEND_URL`,
+so a stale host cannot survive a redeploy — extracts the system prompt and first message
+from `agent-prompt.md`, and creates or updates the agent. It matches on name, so it is
+idempotent and safe to re-run after any edit. Re-pointing nine tools by hand is nine chances
+to miss one, and a tool left on a dead URL fails silently mid-conversation.
+
 Two things in the prompt do real work:
 
 1. **The agent is forbidden from answering route or weather questions from memory.** Those
