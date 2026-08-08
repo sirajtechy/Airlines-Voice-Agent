@@ -60,9 +60,25 @@ const THEME = `
   header {
     background: var(--surface); border-bottom: 3px solid var(--ek-red);
     box-shadow: inset 0 -6px 0 -3px var(--ek-gold);
-    padding: 10px 18px; display: flex; align-items: center; gap: 11px;
+    padding: 11px 18px; display: flex; align-items: center; gap: 12px;
   }
-  header img { height: 46px; width: auto; display: block; }
+  /* The supplied artwork is a square with wide white margins, so the symbol is
+     cropped tight and paired with a CSS wordmark. Scaling the padded original
+     to header height rendered the glyph at roughly half its apparent size. */
+  header .symbol { height: 40px; width: auto; display: block; flex-shrink: 0; }
+  .lockup { display: flex; flex-direction: column; line-height: 1.05; }
+  .lockup .name {
+    font-size: 1.42rem; font-weight: 600; color: var(--ek-red);
+    letter-spacing: 0.21em; text-transform: uppercase;
+  }
+  .lockup .tag {
+    font-size: 0.53rem; color: var(--ink-soft); letter-spacing: 0.29em;
+    text-transform: uppercase; margin-top: 3px;
+  }
+  @media (max-width: 380px) {
+    .lockup .name { font-size: 1.18rem; letter-spacing: 0.16em; }
+    header .symbol { height: 34px; }
+  }
   .badge {
     margin-inline-start: auto; background: #fdf2f3; color: var(--ek-red-dark);
     border: 1px solid #f2d6d8; font-size: 0.62rem; letter-spacing: 0.14em;
@@ -74,7 +90,7 @@ const THEME = `
     background: var(--surface); border-bottom: 1px solid var(--line);
     padding: 30px 20px 26px; text-align: center;
   }
-  .hero-logo { width: min(210px, 52vw); height: auto; margin: 0 auto 14px; display: block; }
+  .hero-logo { width: min(250px, 60vw); height: auto; margin: 0 auto 14px; display: block; }
   .hero h1 {
     font-size: clamp(1.6rem, 5.6vw, 2.15rem); font-weight: 300;
     letter-spacing: -0.01em; margin-bottom: 8px;
@@ -172,7 +188,11 @@ const TOGGLE_SCRIPT = `
 
 const HEADER = `
   <header>
-    <img src="/assets/raahi-mark.png" alt="RAAHI — your way forward">
+    <img class="symbol" src="/assets/raahi-symbol.png" alt="">
+    <span class="lockup">
+      <span class="name">Raahi</span>
+      <span class="tag">Your way forward</span>
+    </span>
     <span class="badge">Operations copilot</span>
   </header>`;
 
