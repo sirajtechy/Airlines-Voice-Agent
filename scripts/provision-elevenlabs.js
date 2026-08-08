@@ -169,7 +169,49 @@ const ASR_KEYWORDS = [
   'Terminal three', 'Concourse', 'IROPS',
 ];
 
-function buildAgentConfig({ systemPrompt, firstMessage }, toolIds) {
+const MCP_SERVER_NAME = 'IROPS Flight Tracking';
+
+/**
+ * Register (or find) our backend's /mcp endpoint as a native ElevenLabs MCP
+ * server. auto_approve_all is a considered choice, not a shortcut: both tools
+ * are read-only lookups of public transponder data, and a human-approval gate
+ * in the middle of a phone call is an unanswerable question.
+ */
+async function upsertMcpServer() {
+  if (DRY_RUN) {
+    console.log(`\n  [dry-run] MCP server "${MCP_SERVER_NAME}" -> ${backendUrl}/mcp`);
+    return 'dry-run-mcp';
+  }
+
+  const existing = await api('GET', '/convai/mcp-servers');
+  const match = (existing.mcp_servers || []).find(
+    (s) => (s.config?.name || s.name) === MCP_SERVER_NAME
+  );
+  if (match) {
+    const id = match.id || match.mcp_server_id;
+    console.log(`\n  found MCP server  ${MCP_SERVER_NAME}  (${id})`);
+    return id;
+  }
+
+  const created = await api('POST', '/convai/mcp-servers', {
+    config: {
+      name: MCP_SERVER_NAME,
+      url: `${backendUrl}/mcp`,
+      transport: 'STREAMABLE_HTTP',
+      approval_policy: 'auto_approve_all',
+      description:
+        'Live ADS-B flight tracking: aircraft position by flight number, and a live snapshot of traffic around an airport.',
+      tool_call_sound: 'typing',
+      tool_call_sound_behavior: 'always',
+      response_timeout_secs: 20,
+    },
+  });
+  const id = created.id || created.mcp_server_id;
+  console.log(`\n  created MCP server  ${MCP_SERVER_NAME}  (${id})`);
+  return id;
+}
+
+function buildAgentConfig({ systemPrompt, firstMessage }, toolIds, mcpServerIds) {
   return {
     name: AGENT_NAME,
     conversation_config: {
@@ -181,6 +223,7 @@ function buildAgentConfig({ systemPrompt, firstMessage }, toolIds) {
           llm: LLM,
           temperature: 0,
           tool_ids: toolIds,
+          mcp_server_ids: mcpServerIds,
           built_in_tools: {
             // Let the agent close cleanly once the caller is sorted, rather
             // than idling on an open line until the duration cap.
@@ -300,7 +343,8 @@ async function main() {
   console.log(`  ${toolConfigs.length} tool definitions\n`);
 
   const toolIds = await upsertTools(toolConfigs);
-  const agentId = await upsertAgent(buildAgentConfig(prompt, toolIds));
+  const mcpServerId = await upsertMcpServer();
+  const agentId = await upsertAgent(buildAgentConfig(prompt, toolIds, [mcpServerId]));
 
   if (agentId) {
     console.log(`\n  Talk to it: https://elevenlabs.io/app/conversational-ai/agents/${agentId}\n`);

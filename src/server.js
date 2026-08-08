@@ -108,6 +108,7 @@ app.post('/webhooks/context', (req, res) => {
 });
 
 app.use('/tools', toolsRouter);
+app.use('/mcp', require('./routes/mcp'));
 
 app.use((req, res) => {
   res.status(404).json({ status: 'degraded', message: `No tool at ${req.method} ${req.path}.` });

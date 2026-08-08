@@ -140,4 +140,61 @@ function speakablePosition(result) {
   return `The aircraft is airborne right now, ${parts.join(', ')}, ${p.vertical_state}.`;
 }
 
-module.exports = { positionFor, toCallsign, speakablePosition, ADSB_API, TIMEOUT_MS };
+const ADSB_POINT_API = 'https://api.adsb.lol/v2/point';
+
+/**
+ * Every aircraft currently broadcasting within `radiusNm` of a point.
+ *
+ * This is the tool the flight-tracking MCPs (airplanes.live et al.) exist to
+ * provide, from the same volunteer receiver network, minus their
+ * non-commercial licence problem. It answers questions no schedule can:
+ * "how busy is Dubai right now", "is anything actually moving".
+ *
+ * @param {number} lat @param {number} lon @param {number} radiusNm
+ * @param {string} [airlinePrefix] ICAO callsign prefix filter, e.g. "UAE"
+ * @returns {Promise<{aircraft: Array, total: number, source: 'live'|'none', error?: string}>}
+ */
+async function snapshot(lat, lon, radiusNm = 100, airlinePrefix = null) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(`${ADSB_POINT_API}/${lat}/${lon}/${Math.min(radiusNm, 250)}`, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    if (!res.ok) return { aircraft: [], total: 0, source: 'none', error: `adsb.lol responded ${res.status}` };
+
+    const body = await res.json();
+    let ac = Array.isArray(body?.ac) ? body.ac : [];
+    const total = ac.length;
+    if (airlinePrefix) {
+      const prefix = String(airlinePrefix).toUpperCase();
+      ac = ac.filter((a) => (a.flight || '').trim().toUpperCase().startsWith(prefix));
+    }
+
+    const aircraft = ac
+      .filter((a) => a.flight && typeof a.alt_baro === 'number')
+      .sort((a, b) => (a.alt_baro || 0) - (b.alt_baro || 0))
+      .slice(0, 12)
+      .map((a) => ({
+        callsign: (a.flight || '').trim(),
+        aircraft_type: a.t || null,
+        altitude_ft: a.alt_baro,
+        ground_speed_kt: typeof a.gs === 'number' ? Math.round(a.gs) : null,
+        vertical_state: describeVerticalRate(typeof a.baro_rate === 'number' ? a.baro_rate : a.geom_rate),
+      }));
+
+    return { aircraft, total, source: 'live' };
+  } catch (err) {
+    return {
+      aircraft: [],
+      total: 0,
+      source: 'none',
+      error: err.name === 'AbortError' ? 'adsb.lol timed out' : err.message,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+module.exports = { positionFor, snapshot, toCallsign, speakablePosition, ADSB_API, TIMEOUT_MS };
