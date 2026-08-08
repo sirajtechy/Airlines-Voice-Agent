@@ -126,7 +126,7 @@ npm test
 
 ---
 
-## The nine tools
+## The twelve tools
 
 All are `POST`, all take and return JSON, all respond `200`.
 
@@ -140,7 +140,10 @@ All are `POST`, all take and return JSON, all respond `200`.
 | `/tools/rebooking_options` | `{ flight_no? , destination? }` | `options[]`, `route_blocked`, `advice`, `source` | Static schedule + live advisory cross-check |
 | `/tools/policy_lookup` | `{ topic }` | `summary`, `source_hint` | Static policy baseline |
 | `/tools/turnaround_brief` | `{ flight_no }` | stand, ground time, critical path, `risks[]`, station weather | Static brief + live METAR |
-| `/tools/entry_requirements` | `{ destination }` | `region`, `applies`, `action_required`, `requirements[]`, `exemptions[]`, `summary`, `last_updated`, `source` | context.dev → emirates.com EU/UK sections |
+| `/tools/entry_requirements` | `{ destination }` | `region`, `applies`, `action_required`, `requirements[]`, `exemptions[]`, `official_source`, `source` | context.dev → emirates.com + gov.uk + europa.eu, search fallback for anywhere else |
+| `/tools/journey_brief` | `{ pnr }` | `headline`, `next_action`, `clear_to_travel`, `checks[]`, `segments` | Demo booking store + **five live checks fanned out in parallel** |
+| `/tools/recent_changes` | `{ within_minutes? }` | `changed`, `minutes_ago`, `summary`, `changes[]` | context.dev **Monitor** webhook |
+| `/tools/travel_intel` | `{ question, destination? }` | `answer`, `sources[]`, `source` | context.dev **web search** over airline/government domains |
 
 `flight_status` is the one tool that mixes two feeds, so it carries two source fields.
 `schedule_source` is always `mock` — no keyless source publishes gate numbers or delay
@@ -165,11 +168,11 @@ If `"source"` comes back `"live"`, context.dev is wired up correctly.
 
 ## How the voice agent calls it
 
-The ElevenLabs agent is configured with nine **webhook tools**, one per endpoint. Each
+The ElevenLabs agent is configured with twelve **webhook tools**, one per endpoint. Each
 posts JSON to `https://<your-render-url>/tools/<name>` with a 20-second timeout, and the
 agent reads the returned fields aloud.
 
-The system prompt, voice settings, and all nine tool definitions are in
+The system prompt, voice settings, and all twelve tool definitions are in
 [`elevenlabs/`](elevenlabs/) — [`agent-prompt.md`](elevenlabs/agent-prompt.md) is
 copy-pasteable into the dashboard, and [`elevenlabs/tools/*.json`](elevenlabs/tools/) mirror
 the webhook tool shape field-for-field.
@@ -241,10 +244,17 @@ carries a `source` field, so you can verify each row yourself rather than trusti
 | `rebooking_options` | Cross-check | Live advisory decides `route_blocked` | The seats themselves |
 | `turnaround_brief` | Cross-check | Live METAR for the station | The brief itself |
 | `policy_lookup` | No | — | Entirely static; entitlements genuinely do not change hourly |
+| `recent_changes` | **Yes** | context.dev Monitor pushes advisory changes to our webhook | — |
+| `travel_intel` | **Yes** | context.dev web search over airline/government domains | — |
+| `journey_brief` | **Partly** | All five checks it fans out are live | The PNR-to-itinerary lookup only (`booking_source: "demo_booking"`) |
 
 Things we deliberately do **not** claim:
 
-- **No real booking or PNR integration.** The agent says so out loud when asked.
+- **No real booking or PNR integration.** `journey_brief` accepts a record locator and
+  resolves it against a demo store, because emirates.com/manage-booking is
+  authentication-gated — we scraped it and got a login redirect, not an itinerary. Every
+  check performed *on* that itinerary is live. The response labels the lookup
+  `booking_source: "demo_booking"` and the agent is told never to invent passenger details.
 - **No live gate, delay or cancellation feed.** Those need a commercial contract (Cirium,
   FlightAware). We tried the keyless options; ADS-B gives position, not schedule, and we
   label it as position.
@@ -264,7 +274,7 @@ The repo carries a [`render.yaml`](render.yaml), so Render configures itself:
 3. In the dashboard, set `CONTEXT_DEV_API_KEY` (marked `sync: false`, so it is not in git).
 4. Deploy. Your URL will be `https://irops-copilot-backend.onrender.com`.
 
-Then, in ElevenLabs, point all nine tools at the Render URL and **re-Publish the agent**.
+Then, in ElevenLabs, run `scripts/provision-elevenlabs.js` to point all twelve tools at the Render URL.
 
 > Render's free tier sleeps after inactivity and takes ~30s to wake. Hit `/healthz` and
 > `POST /admin/warm` a minute before demoing.
@@ -282,7 +292,7 @@ src/lib/cache.js         Disk + memory cache
 src/lib/advisory.js      Parses advisory prose into structured answers
 src/data/mocks.js        Static fallback: flights, policies, schedules
 test/                    19 tests, run with no network
-elevenlabs/              Agent prompt, voice settings, 9 tool definitions
+elevenlabs/              Agent prompt, voice settings, 12 tool definitions
 docs/demo-script.md      The three-question demo run
 TECH-SPEC.md             Engineering reasoning
 ```

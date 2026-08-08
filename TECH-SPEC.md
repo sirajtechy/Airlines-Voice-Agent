@@ -30,7 +30,7 @@ scales past a queue that a call centre cannot.
 Caller ──speech──> ElevenLabs Conversational Agent
                      (STT, tool-calling LLM, TTS, barge-in)
                               │
-                    9 webhook tools, HTTPS POST, 20s timeout
+                   12 webhook tools, HTTPS POST, 20s timeout
                               ▼
                    Express backend (Render, Node 18)
                      src/routes/tools.js
@@ -133,7 +133,7 @@ prompt. The 42-test suite runs with the API key blank and the cache cleared — 
 path is the one we tested hardest, because a demo that dies on venue wifi scores zero
 regardless of what it does when the network is up.
 
-**Honest limits.** Five of the nine tools are live-first: `disruption_status`,
+**Honest limits.** Eight of the twelve tools are live-first: `disruption_status`,
 `transit_rules`, `entry_requirements` and `stranded_support` read the Emirates advisory
 through context.dev, and `weather_ops` reads aviationweather.gov METAR. The rest serve
 static data with a live cross-check layered on top — `rebooking_options` checks the live
@@ -171,13 +171,13 @@ honest state of it, and the fallback text is good guidance regardless.
    than the primary, `schedule_source` starts reporting `"live"`, and no ElevenLabs tool
    needs re-publishing. The ADS-B position layer already added in `src/lib/adsb.js` stays as
    it is; the two feeds are deliberately independent.
-3. **Mid-conversation invalidation.** We now refresh the advisory cache on a five-minute
-   background timer, so served data is minutes old at worst — but that is a freshness
-   guarantee, not a push. Nothing reaches a conversation that is already in flight; the
-   agent only learns of a change on its next tool call. Closing that gap means holding
-   conversation state and pushing an event into it, letting the agent say *"that just
-   changed while we were talking"*. That is the behaviour the use-case actually wants and
-   the thing we could not fit in six hours.
+3. **Mid-conversation invalidation — half built.** A context.dev Monitor now watches the
+   advisory page on a 15-minute schedule with semantic change detection, and pushes
+   HMAC-signed `change.detected` webhooks to `/webhooks/context`. The agent can ask
+   `recent_changes` and say *"that changed eleven minutes ago"*. What is still missing is
+   the last hop: pushing an event into a conversation that is **already in flight**. The
+   agent learns of a change on its next tool call, not mid-sentence. Closing that needs
+   conversation state and a server-initiated turn, which we did not attempt.
 4. **Outbound calls.** Invert it: when the advisory page changes for a route, the agent calls
    the affected passengers instead of waiting for them to call. Same tools, opposite
    direction.
