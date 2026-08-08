@@ -94,6 +94,18 @@ test('flight_status never reports live data it does not have', async () => {
   }
 });
 
+test('a route-map flight yields route and fleet but never invents a schedule', async () => {
+  const { status, json } = await post('/tools/flight_status', { flight_no: 'EK 412' });
+  assert.strictEqual(status, 200);
+  if (json.status === 'degraded') return; // offline AND adsb blocked — acceptable
+  assert.strictEqual(json.schedule_source, 'route_map');
+  assert.strictEqual(json.destination, 'SYD');
+  assert.ok(json.typical_aircraft.includes('A380'));
+  for (const forbidden of ['delay_minutes', 'gate', 'estimated_departure']) {
+    assert.ok(!(forbidden in json), `route_map response must not fabricate ${forbidden}`);
+  }
+});
+
 test('missing required params degrade instead of crashing', async () => {
   for (const path of ['/tools/flight_status', '/tools/disruption_status', '/tools/transit_rules', '/tools/entry_requirements']) {
     const { status, json } = await post(path, {});

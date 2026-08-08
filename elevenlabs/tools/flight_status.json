@@ -1,7 +1,7 @@
 {
   "type": "webhook",
   "name": "flight_status",
-  "description": "Get the status of a specific flight when the caller names a flight number. Returns two different kinds of data, which you must keep apart: the schedule block (status, delay_minutes, gate, estimated_departure) is Emirates' published schedule and is labelled by `schedule_source`; `live_position` is a live ADS-B transponder fix and is labelled by `position_source`. If `airborne` is false, the aircraft is not being tracked in the air — that means it has not departed OR is outside tracking coverage, and it NEVER means the flight is cancelled.",
+  "description": "Get information about a specific Emirates flight when the caller names a flight number. Three tiers, clearly labelled: (1) three demo disruption records (EK17, EK001, EK957) carry full schedule detail with schedule_source 'mock'; (2) ~330 real Emirates flight numbers resolve via a route map to their city pair and typical aircraft with schedule_source 'route_map' — for these you know the ROUTE and FLEET but NOT today's times, gates or delays, so never invent them; (3) live_position is a live ADS-B transponder fix labelled by position_source. airborne false means not tracked in the air — not departed or out of coverage — and NEVER means cancelled. When schedule_source is 'route_map', speak the summary field: it is already phrased honestly.",
   "response_timeout_secs": 20,
   "api_schema": {
     "url": "https://irops-copilot-backend.onrender.com/tools/flight_status",

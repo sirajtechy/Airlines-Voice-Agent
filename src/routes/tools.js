@@ -6,6 +6,7 @@ const adsb = require('../lib/adsb');
 const advisory = require('../lib/advisory');
 const changes = require('../lib/changes');
 const liveSources = require('../lib/liveSources');
+const ekRoutes = require('../data/ekRoutes');
 const {
   flightDB,
   bookings,
@@ -112,13 +113,39 @@ router.post(
     const airborne = adsbResult.source === 'live' ? Boolean(adsbResult.airborne) : null;
     const live_note = adsb.speakablePosition(adsbResult);
 
-    // Unknown to the schedule table but visible on ADS-B: we can still answer
-    // usefully, and refusing would waste the one genuinely live signal we have.
+    // Not one of the demo disruption records — resolve it against the route
+    // map, which knows the city pair and typical fleet for ~140 EK flights.
+    // Route knowledge is not a departure time: no invented delays, no gates.
     if (!flight) {
+      const route = ekRoutes.routeFor(flightNo);
+      if (route) {
+        return res.status(200).json({
+          flight_no: normFlightNo(flightNo),
+          route: `${route.origin} → ${route.destination}`,
+          origin: route.origin,
+          origin_city: route.origin_city,
+          destination: route.destination,
+          destination_city: route.destination_city,
+          typical_aircraft: route.aircraft,
+          status: adsbResult.position ? 'In flight' : 'Scheduled service',
+          summary: `${normFlightNo(flightNo)} is the Emirates service from ${route.origin_city} to ${route.destination_city}, typically a ${route.aircraft}.${adsbResult.position ? '' : ' I do not have live departure times or gates for it.'}`,
+          live_note,
+          live_position: adsbResult.position || null,
+          airborne,
+          position_source: adsbResult.source,
+          // Route map, not today's schedule — the agent says "flies the
+          // route", never "departs at" a time we do not have.
+          schedule_source: 'route_map',
+          source: adsbResult.position ? 'live' : 'route_map',
+        });
+      }
+
+      // Unknown to every table but visible on ADS-B: still answer usefully —
+      // refusing would waste the one genuinely live signal we have.
       if (!adsbResult.position) {
         return res.status(200).json({
           status: 'degraded',
-          message: `I could not find flight ${flightNo} in today's schedule, and it is not showing on live tracking either. Could you read the flight number back to me?`,
+          message: `I could not place flight ${flightNo} on the Emirates network, and it is not showing on live tracking either. Could you read the flight number back to me?`,
           source: 'none',
         });
       }
