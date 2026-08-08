@@ -31,7 +31,10 @@ const ROOT = path.join(__dirname, '..');
 const TOOLS_DIR = path.join(ROOT, 'elevenlabs', 'tools');
 const PROMPT_FILE = path.join(ROOT, 'elevenlabs', 'agent-prompt.md');
 
-const AGENT_NAME = process.env.AGENT_NAME || 'IROPS Copilot';
+const AGENT_NAME = process.env.AGENT_NAME || 'RAAHI';
+// Names the agent may have carried before. A rename must update the existing
+// agent, not quietly create a second one whose tools then drift out of sync.
+const PREVIOUS_AGENT_NAMES = ['IROPS Copilot'];
 // "Sarah — mature, reassuring, confident". The brief is a stressed caller in a
 // noisy terminal; a bright, upbeat voice reads as tone-deaf during a disruption.
 const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL';
@@ -336,7 +339,8 @@ async function upsertAgent(agentConfig) {
   }
 
   const existing = await api('GET', '/convai/agents');
-  const match = (existing.agents || []).find((a) => a.name === agentConfig.name);
+  const acceptable = [agentConfig.name, ...PREVIOUS_AGENT_NAMES];
+  const match = (existing.agents || []).find((a) => acceptable.includes(a.name));
 
   if (match) {
     const id = match.agent_id || match.id;
