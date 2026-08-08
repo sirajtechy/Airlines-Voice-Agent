@@ -4,8 +4,11 @@ const express = require('express');
 const ctx = require('../lib/contextClient');
 const adsb = require('../lib/adsb');
 const advisory = require('../lib/advisory');
+const changes = require('../lib/changes');
+const liveSources = require('../lib/liveSources');
 const {
   flightDB,
+  bookings,
   policies,
   rebookingOptions,
   turnaroundBriefs,
@@ -365,6 +368,52 @@ router.post(
     const scraped = await ctx.scrape(EMIRATES_UPDATES);
     const parsed = advisory.parseEntryRequirements(scraped.data, destination);
 
+    // The airline advisory only covers the EU and the UK. For anywhere else,
+    // fall through to the official source for that country rather than telling
+    // the caller we do not know — "I don't cover Nigeria" is a bad answer when
+    // gov.uk and emirates.com both document it.
+    if (!parsed.matched) {
+      const found = await liveSources.searchTrusted(
+        `entry requirements visa passport rules for travellers to ${destination}`,
+        destination
+      );
+      if (found.answer) {
+        return res.status(200).json({
+          destination,
+          region: null,
+          region_label: destination,
+          applies: true,
+          action_required: true,
+          requirements: [found.answer],
+          exemptions: [],
+          summary: `Here is what the official sources say about entering ${destination}. ${found.answer}`,
+          last_updated: null,
+          blocks_travel: false,
+          sources: found.sources,
+          // Searched, not curated — the agent is told to attribute this.
+          attribution_required: true,
+          source: found.source,
+        });
+      }
+    }
+
+    // Cross-read the dedicated official page for the bloc (gov.uk for the UK,
+    // europa.eu for Schengen) so we are not relying on the airline's summary of
+    // someone else's border policy.
+    let official = null;
+    if (parsed.region) {
+      const extra = await liveSources.readTopic('entry_requirements', parsed.region);
+      const gov = extra.find((s) => s.key !== 'emirates_updates' && s.markdown);
+      if (gov) {
+        const hits = liveSources.relevantSentences(
+          gov.markdown,
+          `entry requirements ${parsed.region === 'uk' ? 'electronic travel authorisation ETA visa' : 'entry exit system biometric registration'}`,
+          2
+        );
+        if (hits.length) official = { label: gov.label, url: gov.url, detail: advisory.truncate(hits.join(' '), 300) };
+      }
+    }
+
     res.status(200).json({
       destination,
       region: parsed.region,
@@ -375,10 +424,205 @@ router.post(
       exemptions: parsed.exemptions,
       summary: parsed.summary,
       last_updated: parsed.last_updated,
+      official_source: official,
       // Paperwork, not a closed border. Stated explicitly so the agent never
       // reads this tool as a travel ban.
       blocks_travel: false,
       source: parsed.matched ? scraped.source : 'none',
+    });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// 10. POST /tools/recent_changes  { within_minutes? }
+// ---------------------------------------------------------------------------
+router.post(
+  '/recent_changes',
+  safe('recent_changes', async (req, res) => {
+    const withinMinutes = Number(req.body?.within_minutes) || 120;
+    const found = changes.recent({ limit: 3, withinMinutes });
+
+    if (!found.length) {
+      return res.status(200).json({
+        changed: false,
+        within_minutes: withinMinutes,
+        summary: 'Nothing in the Emirates travel advisory has changed recently — what I told you is current.',
+        changes: [],
+        source: 'monitor',
+      });
+    }
+
+    const newest = found[0];
+    const minutesAgo = Math.max(
+      1,
+      Math.round((Date.now() - new Date(newest.detected_at).getTime()) / 60000)
+    );
+
+    res.status(200).json({
+      changed: true,
+      within_minutes: withinMinutes,
+      minutes_ago: minutesAgo,
+      summary: newest.summary
+        ? `The travel advisory changed about ${minutesAgo} minutes ago. ${advisory.truncate(newest.summary, 260)}`
+        : `The travel advisory changed about ${minutesAgo} minutes ago. I would re-check anything I told you before that.`,
+      changes: found,
+      source: 'monitor',
+    });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// 11. POST /tools/travel_intel  { question, destination? }
+// ---------------------------------------------------------------------------
+router.post(
+  '/travel_intel',
+  safe('travel_intel', async (req, res) => {
+    const question = String(req.body?.question || '').trim();
+    const destination = String(req.body?.destination || '').trim();
+    if (!question) {
+      return res.status(200).json({
+        status: 'degraded',
+        message: 'What would you like me to look up?',
+      });
+    }
+
+    const found = await liveSources.searchTrusted(question, destination);
+
+    if (!found.answer) {
+      return res.status(200).json({
+        status: 'degraded',
+        message: `I could not find anything official on that just now. The Emirates desk or emirates dot com will have it. ${destination ? `You asked about ${destination}.` : ''}`.trim(),
+        source: found.source,
+      });
+    }
+
+    res.status(200).json({
+      question,
+      destination: destination || null,
+      answer: found.answer,
+      sources: found.sources,
+      source: found.source,
+      // Search hits official sites but is not a curated policy statement, so
+      // the agent must attribute rather than assert.
+      attribution_required: true,
+    });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// 12. POST /tools/journey_brief  { pnr }
+// ---------------------------------------------------------------------------
+/**
+ * The whole product in one call: a record locator in, a decision out.
+ *
+ * A passenger holding a boarding pass can read six characters. They cannot
+ * tell you their origin country's entry-restriction status, and they should
+ * not have to — that is the agent's job. So this resolves the itinerary, then
+ * fans out every live source at once and collapses the answers into one
+ * spoken headline plus a next action.
+ *
+ * Fanned out with allSettled rather than sequentially: run in series these
+ * checks total ~5s, in parallel ~1.5s, and a rejected check must degrade its
+ * own line rather than the whole brief.
+ *
+ * Honesty boundary: the PNR->itinerary hop is demo data (`booking_source`).
+ * Everything downstream of it is live and individually sourced in `checks`.
+ */
+router.post(
+  '/journey_brief',
+  safe('journey_brief', async (req, res) => {
+    const pnr = String(req.body?.pnr || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!pnr) {
+      return res.status(200).json({
+        status: 'degraded',
+        message: 'What is your booking reference? It is the six-character code on your boarding pass.',
+      });
+    }
+
+    const booking = bookings[pnr];
+    if (!booking) {
+      return res.status(200).json({
+        status: 'degraded',
+        message: `I could not find booking ${pnr.split('').join(' ')}. Could you read those six characters back to me, or give me your flight number instead?`,
+        source: 'none',
+      });
+    }
+
+    const lastSegment = booking.segments[booking.segments.length - 1];
+    const connecting = booking.segments.length > 1;
+
+    const [transit, disruption, entry, position, weather] = await Promise.allSettled([
+      ctx.scrape(EMIRATES_UPDATES).then((s) => ({
+        parsed: advisory.parseTransitRules(s.data, booking.origin_city, booking.final_destination_city),
+        source: s.source,
+      })),
+      ctx.scrape(EMIRATES_UPDATES).then((s) => ({
+        parsed: advisory.parseDisruption(s.data, booking.final_destination_city),
+        source: s.source,
+      })),
+      ctx.scrape(EMIRATES_UPDATES).then((s) => ({
+        parsed: advisory.parseEntryRequirements(s.data, booking.final_destination_city),
+        source: s.source,
+      })),
+      adsb.positionFor(lastSegment.flight_no),
+      ctx.fetchText(METAR_URL('OMDB')),
+    ]);
+
+    const val = (r) => (r.status === 'fulfilled' ? r.value : null);
+    const t = val(transit);
+    const d = val(disruption);
+    const e = val(entry);
+    const p = val(position);
+    const w = val(weather);
+
+    const checks = [
+      t && { check: 'transit_rules', ok: t.parsed.transit_allowed, detail: t.parsed.explanation, source: t.source },
+      d && { check: 'disruption_status', ok: !d.parsed.blocked, detail: d.parsed.advisory_text, source: d.source },
+      e && { check: 'entry_requirements', ok: !e.parsed.action_required, detail: e.parsed.summary, source: e.source },
+      p && { check: 'aircraft_position', ok: true, detail: adsb.speakablePosition(p), source: p.source },
+      w && { check: 'hub_weather', ok: true, detail: w.data ? w.data.split('\n')[0].trim() : null, source: w.source },
+    ].filter(Boolean);
+
+    const recent = changes.recent({ limit: 1, withinMinutes: 120 });
+
+    // Precedence is deliberate. Being refused at the gate outranks a closed
+    // destination, which outranks paperwork. Lead with whichever is worst.
+    let headline;
+    let nextAction;
+    let clear = false;
+
+    if (t && !t.parsed.transit_allowed) {
+      headline = t.parsed.explanation;
+      nextAction = t.parsed.conditional
+        ? 'If that exemption covers you, bring evidence of where you have been for the last three weeks. If it does not, do not travel to the airport before speaking to Emirates.'
+        : 'Do not travel to the airport yet. Call Emirates or go to a city ticket office to be re-routed.';
+    } else if (d && d.parsed.blocked) {
+      headline = `Travel to ${booking.final_destination_city} is currently restricted. ${d.parsed.advisory_text}`;
+      nextAction = 'Ask Emirates about re-routing or a refund before you set off.';
+    } else if (e && e.parsed.action_required) {
+      headline = `Your journey looks clear to operate. Before you fly, though — ${e.parsed.summary}`;
+      nextAction = 'Sort that paperwork before you go to the airport; without it you will not be boarded.';
+      clear = true;
+    } else {
+      headline = `Nothing is blocking ${booking.origin_city} to ${booking.final_destination_city}${connecting ? ' through Dubai' : ''} right now.`;
+      nextAction = 'Check in as normal and confirm at the transfer desk when you land.';
+      clear = true;
+    }
+
+    res.status(200).json({
+      pnr: booking.pnr,
+      passenger: booking.passenger,
+      journey: `${booking.origin_city} to ${booking.final_destination_city}${connecting ? ' via Dubai' : ''}`,
+      segments: booking.segments,
+      clear_to_travel: clear,
+      headline: advisory.truncate(headline, 320),
+      next_action: nextAction,
+      advisory_changed_recently: recent.length > 0,
+      advisory_change_note: recent.length ? recent[0].summary : null,
+      checks,
+      // The lookup is demo data; every check above is live and says so itself.
+      booking_source: 'demo_booking',
+      source: t?.source || d?.source || 'none',
     });
   })
 );

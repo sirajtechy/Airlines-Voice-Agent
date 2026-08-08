@@ -1,0 +1,21 @@
+{
+  "type": "webhook",
+  "name": "journey_brief",
+  "description": "THE FASTEST PATH TO AN ANSWER. Give it a six-character booking reference (PNR) from the caller's boarding pass and it returns their whole journey checked against every live source at once: transit rules for their route, disruption at their destination, entry paperwork, where the aircraft physically is, and Dubai weather. Call this FIRST whenever the caller offers a booking reference — it replaces four separate tool calls. Read `headline` first, then `next_action`. `clear_to_travel` false means do not send them to the airport. If `advisory_changed_recently` is true, mention it. NOTE: the booking lookup itself is demo data (`booking_source: demo_booking`) — never invent passenger details beyond what is returned, but every check in `checks` is live.",
+  "response_timeout_secs": 20,
+  "api_schema": {
+    "url": "https://irops-copilot-backend.onrender.com/tools/journey_brief",
+    "method": "POST",
+    "request_headers": { "Content-Type": "application/json" },
+    "request_body_schema": {
+      "type": "object",
+      "properties": {
+        "pnr": {
+          "type": "string",
+          "description": "Six-character booking reference / record locator, e.g. K7X2M9. Strip spaces; callers often spell it out letter by letter."
+        }
+      },
+      "required": ["pnr"]
+    }
+  }
+}

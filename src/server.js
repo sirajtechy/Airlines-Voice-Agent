@@ -6,12 +6,22 @@ const express = require('express');
 const toolsRouter = require('./routes/tools');
 const ctx = require('./lib/contextClient');
 const cache = require('./lib/cache');
+const changes = require('./lib/changes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BOOTED_AT = Date.now();
 
-app.use(express.json({ limit: '256kb' }));
+// Keep the raw bytes: the context.dev monitor webhook is HMAC-signed over the
+// exact body, and re-serialising parsed JSON would not reproduce it.
+app.use(
+  express.json({
+    limit: '256kb',
+    verify: (req, res, buf) => {
+      req.rawBody = buf.toString('utf8');
+    },
+  })
+);
 
 // Tolerate a malformed body rather than 400-ing at ElevenLabs.
 app.use((err, req, res, next) => {
@@ -57,12 +67,44 @@ app.get('/healthz', (req, res) => {
     cache_refresh_ms: Number(process.env.CACHE_REFRESH_MS || 300000),
     uptime_s: Math.round((Date.now() - BOOTED_AT) / 1000),
     context_dev_key: Boolean((process.env.CONTEXT_DEV_API_KEY || '').trim()),
+    sources_configured: ctx.WARM_URLS.length,
+    monitor_changes_seen: changes.count(),
+    webhook_secret_set: Boolean((process.env.CONTEXT_WEBHOOK_SECRET || '').trim()),
   });
 });
 
 app.post('/admin/warm', async (req, res) => {
   const warmed = await ctx.warmCache();
   res.status(200).json({ warmed });
+});
+
+/**
+ * context.dev Monitors push here when the advisory page changes.
+ *
+ * Sits outside the /tools and /admin auth gate because context.dev signs its
+ * deliveries instead of carrying our shared secret. Always 200s on a duplicate
+ * or unparseable payload — a webhook endpoint that 500s gets retried, then
+ * disabled.
+ */
+app.post('/webhooks/context', (req, res) => {
+  const secret = (process.env.CONTEXT_WEBHOOK_SECRET || '').trim();
+  const signature = req.get('x-context-signature') || req.get('X-Context-Signature');
+
+  if (!changes.verifySignature(req.rawBody || '', signature, secret)) {
+    req.log?.('[webhook] rejected: bad signature');
+    return res.status(401).json({ ok: false, error: 'invalid signature' });
+  }
+
+  const event = req.body?.event || req.body?.type || 'unknown';
+  // run.completed fires on every tick including no-change runs; only a real
+  // change is worth surfacing to a caller.
+  if (event.includes('run.completed') && !req.body?.change && !req.body?.data?.change) {
+    return res.status(200).json({ ok: true, recorded: false, reason: 'no change in run' });
+  }
+
+  const entry = changes.record(changes.fromWebhook(req.body));
+  req.log?.(`[webhook] change recorded ${entry.id} ${entry.url || ''}`);
+  res.status(200).json({ ok: true, recorded: true, id: entry.id });
 });
 
 app.use('/tools', toolsRouter);

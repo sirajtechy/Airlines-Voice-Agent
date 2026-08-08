@@ -47,6 +47,69 @@ const flightDB = {
   },
 };
 
+/**
+ * Demo booking store — stands in for the Emirates PNR / Manage Booking API.
+ *
+ * THIS IS NOT A REAL BOOKING LOOKUP AND MUST NEVER BE PRESENTED AS ONE.
+ * emirates.com/manage-booking is authentication-gated; we confirmed it by
+ * scraping it and getting a login redirect, not an itinerary. A real
+ * integration is an airline PNR/Amadeus contract and a compliance review, not
+ * an afternoon's work.
+ *
+ * What it exists for: a PNR is the one thing a passenger can read off a
+ * boarding pass in a noisy terminal, and resolving it to an itinerary is what
+ * unlocks every live check downstream. So the record locator lookup is stubbed
+ * and labelled `source: "demo_booking"`, and everything the agent says *about*
+ * that itinerary — restrictions, transit, entry rules, aircraft position,
+ * weather, whether the advisory just changed — is fetched live.
+ *
+ * Record locators are 6 characters, alphanumeric, no vowels in practice
+ * (airlines avoid accidental words). These follow that shape.
+ */
+const bookings = {
+  K7X2M9: {
+    pnr: 'K7X2M9',
+    passenger: 'A. Nakato',
+    origin_city: 'Kampala',
+    origin: 'EBB',
+    hub: 'DXB',
+    final_destination_city: 'London',
+    final_destination: 'LHR',
+    segments: [
+      { flight_no: 'EK730', from: 'EBB', to: 'DXB', departs: '2026-08-08T16:20:00Z', cabin: 'Economy', seat: '43K' },
+      { flight_no: 'EK17', from: 'DXB', to: 'LHR', departs: '2026-08-09T02:40:00Z', cabin: 'Economy', seat: '61A' },
+    ],
+    ticket: '176-2384995021',
+  },
+  T4B9RD: {
+    pnr: 'T4B9RD',
+    passenger: 'M. Haddad',
+    origin_city: 'Dubai',
+    origin: 'DXB',
+    hub: 'DXB',
+    final_destination_city: 'Beirut',
+    final_destination: 'BEY',
+    segments: [
+      { flight_no: 'EK957', from: 'DXB', to: 'BEY', departs: '2026-08-08T10:15:00Z', cabin: 'Economy', seat: '22C' },
+    ],
+    ticket: '176-2384995188',
+  },
+  P3L8QK: {
+    pnr: 'P3L8QK',
+    passenger: 'S. Iyer',
+    origin_city: 'Mumbai',
+    origin: 'BOM',
+    hub: 'DXB',
+    final_destination_city: 'London',
+    final_destination: 'LHR',
+    segments: [
+      { flight_no: 'EK509', from: 'BOM', to: 'DXB', departs: '2026-08-08T14:05:00Z', cabin: 'Business', seat: '8A' },
+      { flight_no: 'EK17', from: 'DXB', to: 'LHR', departs: '2026-08-09T02:40:00Z', cabin: 'Business', seat: '3F' },
+    ],
+    ticket: '176-2384995342',
+  },
+};
+
 const policies = {
   delay_compensation: {
     topic: 'delay_compensation',
@@ -216,6 +279,7 @@ const regionSections = {
 
 module.exports = {
   flightDB,
+  bookings,
   countryAliases,
   destinationRegions,
   regionSections,

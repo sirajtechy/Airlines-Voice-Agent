@@ -1,0 +1,25 @@
+{
+  "type": "webhook",
+  "name": "travel_intel",
+  "description": "Last-resort live lookup for any travel question the other tools do not cover — an unusual destination, an unfamiliar rule, a country outside the EU and UK. Searches only airline, government and regulator websites (emirates.com, gov.uk, europa.eu, IATA, ICAO, GCAA) and reads the pages back. Slower than the other tools, around ten seconds, so try the specific tool first: disruption_status for closures, transit_rules for connections, entry_requirements for the EU or UK, policy_lookup for entitlements. Because this is searched rather than curated, ALWAYS attribute it out loud — say where it came from, for example 'according to gov dot uk' — and never present it as an Emirates policy statement.",
+  "response_timeout_secs": 20,
+  "api_schema": {
+    "url": "https://irops-copilot-backend.onrender.com/tools/travel_intel",
+    "method": "POST",
+    "request_headers": { "Content-Type": "application/json" },
+    "request_body_schema": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The caller's question, rephrased as a clear search query, e.g. 'transit visa requirements for Nigerian passport holders'"
+        },
+        "destination": {
+          "type": "string",
+          "description": "Country or city the question is about, if any"
+        }
+      },
+      "required": ["question"]
+    }
+  }
+}

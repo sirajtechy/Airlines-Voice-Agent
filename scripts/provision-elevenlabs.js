@@ -111,6 +111,15 @@ function readToolConfigs() {
         'x-tool-secret': sharedSecret,
       };
     }
+
+    // Our tools return in ~1s, and silence over a phone reads as a dropped
+    // call. A quiet keystroke sound fills it without the agent having to say
+    // "one moment", which the prompt forbids for good reason.
+    cfg.tool_call_sound = cfg.tool_call_sound || 'typing';
+    cfg.tool_call_sound_behavior = cfg.tool_call_sound_behavior || 'always';
+    // Let a stressed caller cut in even mid-lookup.
+    cfg.interruption_mode = cfg.interruption_mode || 'allow';
+
     return { file, cfg };
   });
 }
@@ -142,6 +151,24 @@ async function upsertTools(toolConfigs) {
   return ids;
 }
 
+/**
+ * Terms the transcriber must not mangle.
+ *
+ * A misheard airport is not a cosmetic error: "Kampala" heard as "Campala"
+ * fails the alias lookup and the passenger is told there is no restriction.
+ * Airline callsigns, IATA codes and the country names carrying live
+ * restrictions are all boosted.
+ */
+const ASR_KEYWORDS = [
+  'Emirates', 'Etihad', 'flydubai', 'Qatar Airways',
+  'Dubai', 'DXB', 'Heathrow', 'LHR', 'Gatwick', 'JFK',
+  'Kampala', 'Uganda', 'Entebbe', 'Juba', 'South Sudan', 'Kinshasa',
+  'Democratic Republic of Congo', 'DRC', 'Beirut', 'Mumbai', 'Delhi',
+  'Schengen', 'ETA', 'EES', 'eVisa', 'transit', 'layover', 'connection',
+  'cancelled', 'delayed', 'rebook', 'boarding pass', 'stopover', 'stranded',
+  'Terminal three', 'Concourse', 'IROPS',
+];
+
 function buildAgentConfig({ systemPrompt, firstMessage }, toolIds) {
   return {
     name: AGENT_NAME,
@@ -154,7 +181,27 @@ function buildAgentConfig({ systemPrompt, firstMessage }, toolIds) {
           llm: LLM,
           temperature: 0,
           tool_ids: toolIds,
+          built_in_tools: {
+            // Let the agent close cleanly once the caller is sorted, rather
+            // than idling on an open line until the duration cap.
+            end_call: {
+              name: 'end_call',
+              type: 'system',
+              params: { system_tool_type: 'end_call' },
+            },
+            // Dubai is a transit hub: a large share of stranded passengers are
+            // not native English speakers. Detect and switch rather than making
+            // a stressed caller fight for words.
+            language_detection: {
+              name: 'language_detection',
+              type: 'system',
+              params: { system_tool_type: 'language_detection', only_at_conversation_start: false },
+            },
+          },
         },
+      },
+      asr: {
+        keywords: ASR_KEYWORDS,
       },
       tts: {
         voice_id: VOICE_ID,
@@ -171,9 +218,50 @@ function buildAgentConfig({ systemPrompt, firstMessage }, toolIds) {
         // Callers pause to read a boarding pass mid-sentence. Cutting in at 3s
         // makes the agent feel like it is talking over them.
         turn_timeout: 7,
+        // Stressed callers read hesitation as the system being broken, and our
+        // tools return in about a second, so lean forward.
+        turn_eagerness: 'eager',
       },
       conversation: {
         max_duration_seconds: 600,
+      },
+    },
+    platform_settings: {
+      // Scored automatically on every call, so demo failures are measurable
+      // rather than anecdotal.
+      evaluation_criteria: [
+        {
+          identifier: 'answered_not_stalled',
+          name: 'answered_not_stalled',
+          conversation_goal_prompt:
+            'Did the agent actually answer the caller\'s question, rather than saying it would check and then handing the turn back without an answer? Failure if the agent ever said it was checking, waiting, or asked the caller to hold, and did not deliver the answer in that same turn.',
+        },
+        {
+          identifier: 'sourced_honestly',
+          name: 'sourced_honestly',
+          conversation_goal_prompt:
+            'Did the agent avoid presenting static or searched information as live fact? Failure if it claimed real-time knowledge of a gate, delay or cancellation, or stated a searched result as official Emirates policy without attributing it.',
+        },
+        {
+          identifier: 'gave_next_action',
+          name: 'gave_next_action',
+          conversation_goal_prompt:
+            'Did the agent give the caller a concrete next action (which desk, what to ask for, what to do now) rather than only describing the problem?',
+        },
+      ],
+      data_collection: {
+        flight_number: {
+          type: 'string',
+          description: 'The flight number the caller mentioned, e.g. EK17. Empty if none.',
+        },
+        journey: {
+          type: 'string',
+          description: 'The caller\'s route as origin to destination, e.g. Kampala to London via Dubai.',
+        },
+        blocked: {
+          type: 'boolean',
+          description: 'True if the agent told the caller their travel was restricted, suspended or blocked.',
+        },
       },
     },
   };

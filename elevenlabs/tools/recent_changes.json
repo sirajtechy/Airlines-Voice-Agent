@@ -1,0 +1,21 @@
+{
+  "type": "webhook",
+  "name": "recent_changes",
+  "description": "Check whether the Emirates travel advisory has CHANGED recently. A context.dev monitor watches the page and pushes changes to us, so this reports what moved and how many minutes ago — which no other tool can tell you. Call this when a caller asks 'is that still true?', 'has anything changed?', 'how current is this?', when they say they were told something different earlier, or before giving a final answer on a decision that matters (whether to leave for the airport). If `changed` is false, say plainly that nothing has changed and the answer stands.",
+  "response_timeout_secs": 20,
+  "api_schema": {
+    "url": "https://irops-copilot-backend.onrender.com/tools/recent_changes",
+    "method": "POST",
+    "request_headers": { "Content-Type": "application/json" },
+    "request_body_schema": {
+      "type": "object",
+      "properties": {
+        "within_minutes": {
+          "type": "integer",
+          "description": "How far back to look, in minutes. Defaults to 120."
+        }
+      },
+      "required": []
+    }
+  }
+}
