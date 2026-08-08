@@ -1,5 +1,11 @@
 # Architecture walkthrough — how a question becomes an answer
 
+> **For slides and the demo video — pre-rendered images of the diagrams below:**
+> [architecture-stack.png](assets/architecture-stack.png) ·
+> [architecture-stack.svg](assets/architecture-stack.svg) ·
+> [demo-call-sequence.png](assets/demo-call-sequence.png) ·
+> [demo-call-sequence.svg](assets/demo-call-sequence.svg)
+
 This is the memory diagram for the demo: every layer, what it owns, and how one
 caller's question penetrates the whole stack and comes back as speech. Present it
 top to bottom — that is the direction the data flows.
