@@ -21,7 +21,7 @@ top to bottom — that is the direction the data flows.
 └──────────────┬──────────────────────────────────────────────────────────────┘
                │ speech (any language; ASR keyword-boosted for aviation terms)
 ┌──────────────▼──────────────────────────────────────────────────────────────┐
-│  L2 · ELEVENLABS CONVERSATIONAL AGENT            "IROPS Copilot"            │
+│  L2 · ELEVENLABS CONVERSATIONAL AGENT            "RAAHI"            │
 │  STT → LLM (claude-sonnet-5, temp 0) → TTS (flash v2, calm voice, 0.95x)   │
 │  Owns: turn-taking, barge-in, language switching, when to call which tool   │
 │  Governed by: elevenlabs/agent-prompt.md (never stall · never invent an     │

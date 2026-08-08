@@ -1,7 +1,7 @@
 {
-  "name": "irops-copilot-backend",
+  "name": "raahi-voice-agent",
   "version": "1.0.0",
-  "description": "Voice-first flight-disruption copilot backend. ElevenLabs Conversational Agent webhook tools backed by live web data from context.dev.",
+  "description": "RAAHI \u2014 voice-first flight-disruption copilot. ElevenLabs Conversational Agent (12 webhook tools + native MCP server) backed by live web data from context.dev and live ADS-B.",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {

@@ -1,4 +1,4 @@
-# TECH-SPEC — IROPS Copilot
+# TECH-SPEC — RAAHI
 
 ## 01 — Problem
 

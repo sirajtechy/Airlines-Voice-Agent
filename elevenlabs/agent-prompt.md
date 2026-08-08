@@ -1,4 +1,4 @@
-# IROPS Copilot — ElevenLabs agent configuration
+# RAAHI — ElevenLabs agent configuration
 
 Paste the system prompt below into the ElevenLabs Conversational Agent, and attach the
 eight webhook tools in [`tools/`](tools/).

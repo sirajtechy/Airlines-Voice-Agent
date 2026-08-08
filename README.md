@@ -1,4 +1,4 @@
-# IROPS Copilot
+# RAAHI
 
 A voice-first flight-disruption copilot. You call it, say *"I'm flying from Uganda to London
 through Dubai — am I going to get there?"*, and it reads the Emirates travel-updates page
@@ -23,6 +23,8 @@ Built for the BUiD Voice Agents Hackathon, Dubai — 8 August 2026.
   &middot; projectable version at <a href="https://irops-copilot-backend.onrender.com/qr">/qr</a>
 </p>
 
+**Judges start here → [SUBMISSION.md](SUBMISSION.md)** — links, pre-flight checks, demo script.
+
 **Deep dives:** [Architecture walkthrough](docs/architecture.md) — how a question penetrates
 every layer, with the demo call traced hop by hop · [Question bank](docs/question-bank.md) —
 every class of question the agent answers, and what it honestly refuses ·
@@ -34,7 +36,7 @@ every class of question the agent answers, and what it honestly refuses ·
 
 During irregular operations — a suspended route, an entry restriction, a cancelled flight —
 the information a passenger needs changes without warning and lives as prose on an airline's
-travel-updates page. Nobody reads it standing at a departure board. IROPS Copilot puts that
+travel-updates page. Nobody reads it standing at a departure board. RAAHI puts that
 page behind a voice agent.
 
 As of 8 August 2026, the live page carries an Ebola-driven UAE entry restriction covering
@@ -120,7 +122,7 @@ flowchart TD
               │  HTTPS POST, 9 webhook tools, 20s timeout
               ▼
   ┌──────────────────────────┐
-  │  IROPS backend (Express)  │   src/server.js
+  │  RAAHI backend (Express)  │   src/server.js
   │  /tools/* — 9 endpoints   │   src/routes/tools.js
   └───────────┬──────────────┘
               │
@@ -403,4 +405,10 @@ Everything built, in the order it was earned. Each row is verifiable in the comm
 
 ## Team
 
-Team — BUiD Voice Agents Hackathon, Dubai, 8 August 2026.
+Built by **Siraj**, **Astha** and **Farman** — BUiD Voice Agents Hackathon, Dubai,
+8 August 2026.
+
+Devin was used to parallelise the mechanical half of the build (project restructure,
+deployment scaffolding, provisioning scripts) while the team hand-wrote the advisory
+parser, the agent prompt and the guardrail policy — the parts where the judgement calls
+live.

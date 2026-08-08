@@ -56,7 +56,7 @@ app.use(['/tools', '/admin'], (req, res, next) => {
   return res.status(401).json({ status: 'degraded', message: 'Tool authentication failed.' });
 });
 
-app.get('/', (req, res) => res.type('text/plain').send('IROPS Copilot backend is running.'));
+app.get('/', (req, res) => res.type('text/plain').send('RAAHI backend is running.'));
 
 app.get('/healthz', (req, res) => {
   // Surface how stale the advisory actually is. "We cache" is only defensible
@@ -132,7 +132,7 @@ app.use((err, req, res, next) => {
 
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`IROPS Copilot backend listening on :${PORT}`);
+    console.log(`RAAHI backend listening on :${PORT}`);
     ctx
       .warmCache()
       .then((w) => console.log('cache warmed', JSON.stringify(w)))

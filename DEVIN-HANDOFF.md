@@ -1,4 +1,4 @@
-# Devin handoff — IROPS Copilot backend
+# Devin handoff — RAAHI backend
 
 Session handoff, 8 August 2026. Submission deadline **2:30 PM GST today**.
 This document is the contract: what exists, what is proven, what is assumed, and what to

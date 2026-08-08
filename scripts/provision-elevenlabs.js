@@ -34,7 +34,7 @@ const PROMPT_FILE = path.join(ROOT, 'elevenlabs', 'agent-prompt.md');
 const AGENT_NAME = process.env.AGENT_NAME || 'RAAHI';
 // Names the agent may have carried before. A rename must update the existing
 // agent, not quietly create a second one whose tools then drift out of sync.
-const PREVIOUS_AGENT_NAMES = ['IROPS Copilot'];
+const PREVIOUS_AGENT_NAMES = ['RAAHI'];
 // "Sarah — mature, reassuring, confident". The brief is a stressed caller in a
 // noisy terminal; a bright, upbeat voice reads as tone-deaf during a disruption.
 const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL';
@@ -169,12 +169,15 @@ const ASR_KEYWORDS = [
   'Democratic Republic of Congo', 'DRC', 'Beirut', 'Mumbai', 'Delhi',
   'Schengen', 'ETA', 'EES', 'eVisa', 'transit', 'layover', 'connection',
   'cancelled', 'delayed', 'rebook', 'boarding pass', 'stopover', 'stranded',
-  'Terminal three', 'Concourse', 'IROPS', 'Raahi',
+  'Terminal three', 'Concourse', 'Raahi',
   // Arabic — the terms a Gulf caller will actually say.
   'دبي', 'الإمارات', 'أوغندا', 'كمبالا', 'لندن', 'تأشيرة', 'رحلة', 'مطار',
 ];
 
-const MCP_SERVER_NAME = 'IROPS Flight Tracking';
+const MCP_SERVER_NAME = 'RAAHI Flight Tracking';
+// Same reasoning as PREVIOUS_AGENT_NAMES: a rename must find and reuse the
+// existing server, not leave a second one attached to nothing.
+const PREVIOUS_MCP_NAMES = ['IROPS Flight Tracking'];
 
 /**
  * Register (or find) our backend's /mcp endpoint as a native ElevenLabs MCP
@@ -194,8 +197,9 @@ async function upsertMcpServer() {
   // carries the prompt and the other twelve tools.
   try {
     const existing = await api('GET', '/convai/mcp-servers');
-    const match = (existing.mcp_servers || []).find(
-      (s) => (s.config?.name || s.name) === MCP_SERVER_NAME
+    const acceptable = [MCP_SERVER_NAME, ...PREVIOUS_MCP_NAMES];
+    const match = (existing.mcp_servers || []).find((s) =>
+      acceptable.includes(s.config?.name || s.name)
     );
     if (match) {
       const id = match.id || match.mcp_server_id;

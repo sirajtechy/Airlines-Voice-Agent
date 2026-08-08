@@ -26,7 +26,7 @@ require('../src/lib/env').load();
 const ctx = require('../src/lib/contextClient');
 const { SOURCES } = require('../src/data/sources');
 
-const MONITOR_NAME = 'IROPS Copilot — Emirates travel updates';
+const MONITOR_NAME = 'RAAHI — Emirates travel updates';
 const TARGET_URL = SOURCES.emirates_updates.url;
 
 const backendUrl = (process.env.BACKEND_URL || '').trim().replace(/\/+$/, '');

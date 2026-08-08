@@ -1,4 +1,4 @@
-# IROPS Copilot — Complete Build & Deployment Spec (for Devin)
+# RAAHI — Complete Build & Deployment Spec (for Devin)
 
 ## Context
 Voice-first flight-disruption agent for the BUiD hackathon. Voice layer is ElevenLabs
@@ -82,7 +82,7 @@ reachable without a key; if unavailable within timeout, fall back to mock flight
 (EK17, EK001). Add "source" field to the response. Contract otherwise unchanged.
 
 ## Task 7 — Health + demo safety
-- GET /            -> "IROPS Copilot backend is running." (exists, keep)
+- GET /            -> "RAAHI backend is running." (exists, keep)
 - GET /healthz     -> 200 { ok: true, cache_entries: n, uptime_s: n }
 - POST /admin/warm -> triggers warmCache, returns { warmed: [urls] }
 - On boot: warmCache([emirates travel-updates URL, aviationweather.gov OMDB URL])
