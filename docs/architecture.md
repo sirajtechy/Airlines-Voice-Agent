@@ -80,6 +80,42 @@ Two design rules hold at every boundary:
 
 Caller: **"My booking reference is K seven X two M nine — should I leave for the airport?"**
 
+```mermaid
+sequenceDiagram
+    autonumber
+    actor P as Passenger
+    participant EL as ElevenLabs (RAAHI)
+    participant BE as Backend (Render)
+    participant CD as context.dev
+    participant AD as adsb.lol
+    participant WX as aviationweather.gov
+
+    P->>EL: "My booking reference is K seven X two M nine"
+    Note over EL: ASR keyword boost keeps codes and<br/>African place names intact on a noisy line
+    EL->>BE: POST /tools/journey_brief {pnr K7X2M9}
+    Note over BE: PNR → itinerary (demo store —<br/>the one labelled stub)
+    par five live checks, fanned out
+        BE->>CD: scrape advisory (ONE coalesced request)
+        CD-->>BE: markdown (~0.7s warm)
+        Note over BE: advisory.js parses it three ways:<br/>transit (origin-side match!) ·<br/>disruption · UK entry paperwork
+    and
+        BE->>AD: where is EK17 right now
+        AD-->>BE: not airborne / position fix
+    and
+        BE->>WX: METAR OMDB
+        WX-->>BE: live observation
+    end
+    Note over BE: precedence collapse: refused-at-gate ><br/>closed destination > paperwork<br/>→ clear_to_travel false
+    BE-->>EL: 200 JSON in ~2s (headline · carve-out · next action)
+    EL-->>P: "Don't leave for the airport yet — the UAE is not admitting<br/>travellers who've recently been in Uganda... unless you've been<br/>outside those countries for more than 21 days."
+    P->>EL: "Has anything changed in the last hour?"
+    Note over CD: a Monitor re-reads the advisory every 15 min,<br/>semantic diff, pushes signed webhooks
+    CD--)BE: change.detected (HMAC-verified, async)
+    EL->>BE: POST /tools/recent_changes
+    BE-->>EL: changed false — "what I told you is current"
+    EL-->>P: "Nothing has changed — that still stands."
+```
+
 ```
  CALLER          ELEVENLABS              BACKEND                 SOURCES
    │                 │                      │                       │

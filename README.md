@@ -16,6 +16,13 @@ Built for the BUiD Voice Agents Hackathon, Dubai — 8 August 2026.
 - **Live aircraft data:** [adsb.lol](https://adsb.lol) ADS-B (keyless, ODbL)
 - **Backend:** Node 18+ / Express on Render, 49 tests, zero runtime dependencies beyond Express + node-fetch
 
+<p align="center">
+  <img src="docs/assets/raahi-qr.png" width="200" alt="QR code — scan to talk to RAAHI"><br/>
+  <b>Scan to talk to RAAHI</b> — any phone, no install, just a browser and a microphone.<br/>
+  Or open <a href="https://irops-copilot-backend.onrender.com/talk">irops-copilot-backend.onrender.com/talk</a>
+  &middot; projectable version at <a href="https://irops-copilot-backend.onrender.com/qr">/qr</a>
+</p>
+
 **Deep dives:** [Architecture walkthrough](docs/architecture.md) — how a question penetrates
 every layer, with the demo call traced hop by hop · [Question bank](docs/question-bank.md) —
 every class of question the agent answers, and what it honestly refuses ·
@@ -50,6 +57,57 @@ route or weather questions from memory.
 ---
 
 ## Architecture
+
+```mermaid
+flowchart TD
+    C(["Caller — stressed passenger,<br/>any language, noisy terminal"])
+
+    subgraph EL["ElevenLabs · RAAHI"]
+        A["Conversational agent<br/>STT + LLM (claude-sonnet-5) + TTS<br/>barge-in · language detection · ASR keyword boost"]
+    end
+
+    subgraph BE["Express backend · Render"]
+        T["/tools/* — 12 webhook handlers<br/>safe() wrapper: never a 500"]
+        M["/mcp — native MCP server<br/>track_aircraft · airspace_snapshot"]
+        W["/webhooks/context<br/>HMAC-verified change pushes"]
+        TA["/talk + /qr<br/>mobile widget page"]
+    end
+
+    subgraph INT["Intelligence layer — pure functions, tested"]
+        ADV["advisory.js<br/>prose → decisions"]
+        LS["liveSources.js<br/>question → source routing"]
+        CH["changes.js<br/>change ring buffer + signatures"]
+    end
+
+    subgraph DA["Data access — every call: live → cache → static → spoken apology"]
+        CC["contextClient.js<br/>12s budget · request coalescing"]
+        AD["adsb.js · 6s budget"]
+        CA["cache.js · disk + memory<br/>10-min background refresh"]
+    end
+
+    subgraph EXT["Outside world"]
+        CD1["context.dev SCRAPE<br/>4 verified sources"]
+        CD2["context.dev SEARCH<br/>3 official domains"]
+        CD3["context.dev MONITOR<br/>semantic diff every 15 min"]
+        AL["adsb.lol ADS-B<br/>keyless, ODbL"]
+        MET["aviationweather.gov<br/>METAR"]
+    end
+
+    C <-->|speech| A
+    A -->|"HTTPS POST · 20s timeout"| T
+    A -->|"JSON-RPC · streamable HTTP"| M
+    C -.->|"scan QR, tap widget"| TA
+    T --> ADV & LS
+    T --> CH
+    W --> CH
+    M --> AD
+    ADV & LS --> CC
+    CC --> CA
+    CC --> CD1 & CD2
+    CD3 -->|"signed webhook push"| W
+    AD --> AL
+    CC --> MET
+```
 
 ```
    Caller (phone / web widget)
