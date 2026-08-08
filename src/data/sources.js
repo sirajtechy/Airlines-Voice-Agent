@@ -67,23 +67,34 @@ const KEYLESS = {
  * though it were policy is worse than one that admits it does not know, so
  * the allowlist is airlines, governments and regulators only.
  *
- * The context.dev search API caps includeDomains at 10, so this list is a
- * budget, not a wishlist — ordered by how often an Emirates passenger's
- * question is actually answered there.
+ * Capped at THREE, and that cap is a latency decision, not a taste one.
+ * Measured against the live API: 2 domains 2.4s, 4 domains 8.5s, 10 domains
+ * over 40 seconds. The filter is evidently applied by re-querying per domain,
+ * so every extra domain is another round trip we pay for inside the caller's
+ * turn. Ordered by how often an Emirates passenger's question is actually
+ * answered there.
  */
-const MAX_SEARCH_DOMAINS = 10;
-const TRUSTED_SEARCH_DOMAINS = [
-  'emirates.com',
-  'gov.uk',
-  'europa.eu',
-  'u.ae',
-  'gcaa.gov.ae',
-  'dubaiairports.ae',
-  'iata.org',
-  'icao.int',
-  'travel.state.gov',
-  'canada.ca',
-];
+const MAX_SEARCH_DOMAINS = 3;
+const TRUSTED_SEARCH_DOMAINS = ['emirates.com', 'gov.uk', 'europa.eu'];
+
+/**
+ * Swap in the destination's own authority when we know it, still within the
+ * three-domain budget. Emirates stays pinned — it is the carrier — and the
+ * generic slot gives way to the country that actually sets the rule.
+ */
+const REGIONAL_AUTHORITIES = {
+  uae: 'u.ae', dubai: 'u.ae', 'united arab emirates': 'u.ae',
+  usa: 'travel.state.gov', 'united states': 'travel.state.gov', america: 'travel.state.gov',
+  canada: 'canada.ca',
+  australia: 'homeaffairs.gov.au',
+};
+
+function searchDomainsFor(destination) {
+  const key = String(destination || '').toLowerCase().trim();
+  const authority = REGIONAL_AUTHORITIES[key];
+  if (!authority) return TRUSTED_SEARCH_DOMAINS.slice(0, MAX_SEARCH_DOMAINS);
+  return ['emirates.com', authority, 'gov.uk'].slice(0, MAX_SEARCH_DOMAINS);
+}
 
 function warmSources() {
   const out = [];
@@ -105,6 +116,7 @@ module.exports = {
   KEYLESS,
   TRUSTED_SEARCH_DOMAINS,
   MAX_SEARCH_DOMAINS,
+  searchDomainsFor,
   warmSources,
   sourcesFor,
 };

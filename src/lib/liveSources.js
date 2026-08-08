@@ -18,7 +18,7 @@
 
 const ctx = require('./contextClient');
 const advisory = require('./advisory');
-const { sourcesFor, TRUSTED_SEARCH_DOMAINS } = require('../data/sources');
+const { sourcesFor, searchDomainsFor } = require('../data/sources');
 
 /**
  * Scrape every configured source for a topic, newest attempt first.
@@ -83,7 +83,7 @@ async function searchTrusted(question, destination) {
   // so we search cheaply and then fetch just the top hit through the normal
   // cached scrape path. Same answer, roughly half the latency, and a repeat
   // question is instant.
-  const found = await ctx.search(query, { domains: TRUSTED_SEARCH_DOMAINS, scrape: false });
+  const found = await ctx.search(query, { domains: searchDomainsFor(destination), scrape: false });
   if (!found.results.length) return { answer: null, sources: [], source: found.source };
 
   const top = found.results[0];
@@ -93,7 +93,7 @@ async function searchTrusted(question, destination) {
   const scraped = await ctx.scrape(top.url, {
     useMainContentOnly: true,
     maxAgeMs: 3600000,
-    timeoutMs: 5000,
+    timeoutMs: 4000,
   });
   const hits = relevantSentences(scraped.data, query, 3);
 

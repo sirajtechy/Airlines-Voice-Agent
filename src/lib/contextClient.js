@@ -13,7 +13,7 @@ const TIMEOUT_MS = Number(process.env.FETCH_TIMEOUT_MS || 12000);
 // Search costs a round trip through a search engine plus N page scrapes, so it
 // runs slower than a plain scrape (~10s measured). It is a fallback, never the
 // first thing we try, and it gets its own tighter budget.
-const SEARCH_TIMEOUT_MS = Number(process.env.SEARCH_TIMEOUT_MS || 8000);
+const SEARCH_TIMEOUT_MS = Number(process.env.SEARCH_TIMEOUT_MS || 10000);
 
 const { warmSources, MAX_SEARCH_DOMAINS } = require('../data/sources');
 
