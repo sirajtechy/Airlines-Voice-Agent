@@ -449,6 +449,7 @@ docs/architecture.md       Layer walkthrough + sequence diagram
 docs/question-bank.md      Every question RAAHI answers + guardrail test results
 docs/demo-script.md        The demo run sheet
 docs/RAAHI-loom-deck.pptx  12-slide demo deck (generated)
+docs/RAAHI-deck-notes.md   Speaker notes for the deck (generated)
 docs/assets/               Logo, QR, rendered diagrams (PNG + SVG)
 ```
 

@@ -20,6 +20,7 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
+from pptx.enum.shapes import MSO_SHAPE
 
 # Emirates-adjacent palette, matching src/routes/talk.js
 RED = RGBColor(0xD7, 0x19, 0x21)
@@ -46,11 +47,10 @@ BLANK = prs.slide_layouts[6]
 
 def slide(bg=CANVAS):
     s = prs.slides.add_slide(BLANK)
-    bgshape = s.shapes.add_shape(1, 0, 0, SW, SH)
+    bgshape = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, SW, SH)
     bgshape.fill.solid()
     bgshape.fill.fore_color.rgb = bg
     bgshape.line.fill.background()
-    bgshape.shadow.inherit = False
     return s
 
 
@@ -63,29 +63,29 @@ def full_bleed(s, img=HERO):
         return False
 
 
-def scrim(s, x, y, w, h, color=RGBColor(0x10, 0x10, 0x12), alpha=62000):
-    """Translucent panel so text stays legible over photography."""
-    from pptx.oxml.ns import qn
-    import copy
-    box = s.shapes.add_shape(1, x, y, w, h)
+def scrim(s, x, y, w, h, color=RGBColor(0x12, 0x14, 0x18), alpha=None):
+    """
+    Solid dark panel so text stays legible over photography.
+
+    Was translucent, via an a:alpha element injected straight into the fill XML
+    because python-pptx exposes no alpha API. The package validated and
+    reopened cleanly, but that is a private-schema edit and renderers flagged
+    the file. A solid panel is one property, reads as deliberate design, and
+    cannot be mis-parsed anywhere. `alpha` is accepted and ignored so callers
+    need not change.
+    """
+    box = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, x, y, w, h)
     box.fill.solid()
     box.fill.fore_color.rgb = color
     box.line.fill.background()
-    box.shadow.inherit = False
-    # python-pptx has no alpha API; inject it into the solidFill directly.
-    solid = box.fill._xPr.find(qn('a:solidFill'))
-    clr = solid.find(qn('a:srgbClr'))
-    a = clr.makeelement(qn('a:alpha'), {'val': str(alpha)})
-    clr.append(a)
     return box
 
 
 def band(s, y=0, h=Inches(0.10), color=RED):
-    r = s.shapes.add_shape(1, 0, y, SW, h)
+    r = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, y, SW, h)
     r.fill.solid()
     r.fill.fore_color.rgb = color
     r.line.fill.background()
-    r.shadow.inherit = False
     return r
 
 
@@ -119,17 +119,17 @@ def header(s, kicker, title):
          size=11, color=RED, bold=True, caps=True)
     text(s, title, Inches(0.55), Inches(0.95), Inches(12.2), Inches(0.9),
          size=32, color=INK)
-    r = s.shapes.add_shape(1, Inches(0.55), Inches(1.72), Inches(0.62), Pt(3))
+    r = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.55), Inches(1.72), Inches(0.62), Pt(3))
     r.fill.solid(); r.fill.fore_color.rgb = GOLD
-    r.line.fill.background(); r.shadow.inherit = False
+    r.line.fill.background()
 
 
 def bullets(s, items, x=Inches(0.65), y=Inches(2.05), w=Inches(12.0), size=17, gap=0.62):
     for i, (head, body) in enumerate(items):
         yy = y + Inches(i * gap)
-        dot = s.shapes.add_shape(9, x, yy + Inches(0.09), Inches(0.11), Inches(0.11))
+        dot = s.shapes.add_shape(MSO_SHAPE.OVAL, x, yy + Inches(0.09), Inches(0.11), Inches(0.11))
         dot.fill.solid(); dot.fill.fore_color.rgb = GOLD
-        dot.line.fill.background(); dot.shadow.inherit = False
+        dot.line.fill.background()
         tb = s.shapes.add_textbox(x + Inches(0.28), yy - Inches(0.04), w, Inches(0.55))
         tf = tb.text_frame; tf.word_wrap = True
         p = tf.paragraphs[0]; p.line_spacing = 1.2
@@ -141,8 +141,20 @@ def bullets(s, items, x=Inches(0.65), y=Inches(2.05), w=Inches(12.0), size=17, g
             r2.font.size = Pt(size - 1); r2.font.color.rgb = SOFT; r2.font.name = FONT
 
 
+# Speaker notes are collected here and written to a companion markdown file
+# rather than embedded as PowerPoint notes slides.
+#
+# python-pptx's notes_slide generation produces a notesMaster that macOS's
+# renderer and PowerPoint both reject — verified by bisection: a one-slide deck
+# with a single line of notes fails to render, the identical deck without notes
+# is fine. That is what made the deck look corrupted. A companion file is also
+# more useful while recording, since it can sit on a second screen instead of
+# behind the slide.
+SPEAKER_NOTES = []
+
+
 def notes(s, txt):
-    s.notes_slide.notes_text_frame.text = txt
+    SPEAKER_NOTES.append(txt)
 
 
 # ─────────────────────────────────────────────────────────── 1 · Title
@@ -196,9 +208,9 @@ bullets(s, [
     ('track_aircraft', 'live ADS-B transponder — where the aircraft physically is'),
     ('weather_ops', 'live METAR — Dubai station conditions'),
 ], y=Inches(2.85), size=16, gap=0.52)
-box = s.shapes.add_shape(1, Inches(0.65), Inches(5.6), Inches(12.0), Inches(1.2))
+box = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.65), Inches(5.6), Inches(12.0), Inches(1.2))
 box.fill.solid(); box.fill.fore_color.rgb = WHITE
-box.line.color.rgb = GOLD; box.shadow.inherit = False
+box.line.color.rgb = GOLD
 text(s, 'Answered in 1.98 seconds, fanned out in parallel.        Control case: P3L8QK — Mumbai → London.\nSame destination. Opposite answer. Because the restriction depends on where you have BEEN.',
      Inches(0.9), Inches(5.78), Inches(11.6), Inches(1.0), size=16, color=INK, line=1.35)
 notes(s, "Screen: phone on /talk. Say the PNR out loud. Then P3L8QK. "
@@ -333,4 +345,31 @@ text(s, 'Try: “My booking reference is K seven X two M nine.”     github.com
 notes(s, "End here. Leave it on screen while you close.")
 
 prs.save('docs/RAAHI-loom-deck.pptx')
-print(f'docs/RAAHI-loom-deck.pptx — {len(prs.slides._sldIdLst)} slides')
+
+TITLES = [
+    'Title — hero artwork',
+    'The problem — two sentences',
+    'The demo — one PNR, five live checks',
+    'Architecture — five layers',
+    'The call flow — parallel fan-out',
+    'The intelligence — what keywords miss',
+    'Sponsor technology — context.dev x ElevenLabs',
+    'What is actually live',
+    'Reliability and guardrails  (reserve)',
+    'Two bugs worth admitting  (reserve)',
+    'Vision — closing beat',
+    'Try it — scan the QR',
+]
+
+with open('docs/RAAHI-deck-notes.md', 'w') as fh:
+    fh.write('# Speaker notes — RAAHI demo deck\n\n')
+    fh.write('Companion to [RAAHI-loom-deck.pptx](RAAHI-loom-deck.pptx). Generated by\n')
+    fh.write('`scripts/build-deck.py` — edit the script, not this file.\n\n')
+    fh.write('Notes live here rather than inside the .pptx because python-pptx\'s notes-slide\n')
+    fh.write('output is rejected by PowerPoint and by macOS\'s renderer, which made the deck\n')
+    fh.write('appear corrupted. Keep this open on a second screen while recording.\n\n')
+    for i, (title, note) in enumerate(zip(TITLES, SPEAKER_NOTES), 1):
+        fh.write(f'### Slide {i} · {title}\n\n{note}\n\n')
+
+print(f'docs/RAAHI-loom-deck.pptx — {len(prs.slides._sldIdLst)} slides, no embedded notes')
+print(f'docs/RAAHI-deck-notes.md  — {len(SPEAKER_NOTES)} speaker notes')
