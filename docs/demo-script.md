@@ -110,13 +110,18 @@ suite with the network blocked.
 
 The brief says overclaiming costs more than not claiming. Specifically:
 
-- **Do not say all eight tools are live.** Four are live-backed (`disruption_status`,
-  `transit_rules`, `stranded_support`, `weather_ops`); four are static with a live
-  cross-check. The `source` field in every response says which, and judges can check.
+- **Do not say all twelve tools are live.** Eight are live-backed (`disruption_status`,
+  `transit_rules`, `entry_requirements`, `weather_ops`, `recent_changes`, `travel_intel`,
+  plus the two MCP tracking tools); the rest are static with a live cross-check, and
+  `flight_status` is deliberately split (live position, static schedule). The `source`
+  field in every response says which, and judges can check it themselves.
 - **Do not say `stranded_support` is returning live data** — it returns `baseline` today,
   because there is no voucher language on the current page to extract.
 - **Do not say "streaming"** unless you mean ElevenLabs' own audio streaming.
 - **Do not say "real-time"** about the cache. Say "live at the moment of the question".
+- **Do not claim we push changes into a live conversation turn.** A context.dev monitor does
+  push advisory changes to the backend within ~15 minutes, and `recent_changes` reports how
+  long ago — but the agent only learns of it on its next tool call, not mid-sentence.
 - **Do not claim mid-conversation data invalidation.** We re-fetch per call. That is good,
   and it is not the same thing.
 

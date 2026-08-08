@@ -215,7 +215,7 @@ an injection test — a sentence-window bug that could flip a real restriction t
 
 1. **More advisory sources, same parser.** The sentence-window matcher is source-agnostic.
    Point it at GCAA notices, destination-country entry rules, and other carriers' update
-   pages and the same nine tools get materially better with no interface change.
+   pages and the same twelve tools get materially better with no interface change.
    `entry_requirements` is the proof: it reads the EU EES and UK ETA sections of a page we
    were already scraping, and cost an alias table plus a section splitter.
 2. **Real flight status.** Swap the static `flightDB` for a Cirium or FlightAware feed
