@@ -169,7 +169,9 @@ const ASR_KEYWORDS = [
   'Democratic Republic of Congo', 'DRC', 'Beirut', 'Mumbai', 'Delhi',
   'Schengen', 'ETA', 'EES', 'eVisa', 'transit', 'layover', 'connection',
   'cancelled', 'delayed', 'rebook', 'boarding pass', 'stopover', 'stranded',
-  'Terminal three', 'Concourse', 'IROPS',
+  'Terminal three', 'Concourse', 'IROPS', 'Raahi',
+  // Arabic — the terms a Gulf caller will actually say.
+  'دبي', 'الإمارات', 'أوغندا', 'كمبالا', 'لندن', 'تأشيرة', 'رحلة', 'مطار',
 ];
 
 const MCP_SERVER_NAME = 'IROPS Flight Tracking';
@@ -268,14 +270,42 @@ function buildAgentConfig({ systemPrompt, firstMessage }, toolIds, mcpServerIds)
       },
       tts: {
         voice_id: VOICE_ID,
-        // Must be the v2 (not v2.5) flash/turbo model: the API rejects an
-        // English-locked agent on any other, and flash is the low-latency one.
-        model_id: 'eleven_flash_v2',
+        // multilingual v2, deliberately. flash v2 is English-only, and the
+        // API rejects the v2.5 models outright for agents whose default
+        // language is English — verified empirically: flash v2.5 and turbo
+        // v2.5 both 400, multilingual v2 is the one multilingual model it
+        // accepts. It costs some TTS latency versus flash; an agent that can
+        // answer a stranded caller in Arabic is worth that in this city.
+        model_id: 'eleven_multilingual_v2',
         // Slightly slow and fairly stable: flight numbers and dates have to
         // land first time over a bad line in a loud terminal.
         stability: 0.55,
         similarity_boost: 0.75,
         speed: 0.95,
+      },
+      // Additional spoken languages. The language_detection built-in switches
+      // into these mid-call when the caller speaks them; the prompt tells the
+      // agent to stay there once switched. Flight numbers and airport codes
+      // remain letter-and-digit in any language — aviation convention.
+      language_presets: {
+        ar: {
+          overrides: {
+            agent: {
+              language: 'ar',
+              first_message:
+                'معك راحي، مساعد العمليات لطيران الإمارات. يمكنني التحقق مباشرةً من حالة الرحلات، وتعليق المسارات، وقواعد العبور عبر دبي. ما الذي يحدث في رحلتك؟',
+            },
+          },
+        },
+        hi: {
+          overrides: {
+            agent: {
+              language: 'hi',
+              first_message:
+                'मैं राही हूँ, एमिरेट्स ऑपरेशन्स सहायक। मैं उड़ानों की स्थिति, रूट निलंबन और दुबई ट्रांज़िट नियम तुरंत जाँच सकता हूँ। आपकी यात्रा में क्या हो रहा है?',
+            },
+          },
+        },
       },
       turn: {
         // Callers pause to read a boarding pass mid-sentence. Cutting in at 3s
