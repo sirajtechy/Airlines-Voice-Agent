@@ -129,3 +129,45 @@ test('unknown tool path returns a spoken 404 body, not an empty error', async ()
   assert.strictEqual(json.status, 'degraded');
   assert.ok(json.message);
 });
+
+// ---------------------------------------------------------------------------
+// No data must never become an all-clear.
+//
+// These run with CONTEXT_DEV_API_KEY blank and the cache cleared, which is
+// exactly the state production entered when the context.dev key hit its credit
+// limit and a dyno restart wiped the disk cache. Before this was fixed,
+// journey_brief answered "Nothing is blocking Kampala to London" on zero data.
+// ---------------------------------------------------------------------------
+
+test('advisory tools refuse to issue an all-clear with no data', async () => {
+  const cases = [
+    ['/tools/transit_rules', { origin: 'Uganda', final_destination: 'London' }],
+    ['/tools/disruption_status', { destination: 'Uganda' }],
+    ['/tools/entry_requirements', { destination: 'London' }],
+  ];
+  for (const [path, body] of cases) {
+    const { status, json } = await post(path, body);
+    assert.strictEqual(status, 200, path);
+    assert.notStrictEqual(json.transit_allowed, true, `${path} must not report transit allowed`);
+    assert.notStrictEqual(json.blocked, false, `${path} must not report "not blocked" unverified`);
+    assert.strictEqual(json.source, 'none', `${path} must admit it has no source`);
+    assert.match(json.message || '', /could not reach|do not treat this as an all-clear/i, path);
+  }
+});
+
+test('journey_brief refuses to clear a journey it could not check', async () => {
+  const { status, json } = await post('/tools/journey_brief', { pnr: 'K7X2M9' });
+  assert.strictEqual(status, 200);
+  assert.notStrictEqual(json.clear_to_travel, true,
+    'an unreadable advisory must never produce clear_to_travel true');
+  assert.strictEqual(json.verified, false);
+  assert.match(json.headline, /could not reach/i);
+  assert.match(json.next_action, /confirm with Emirates|all-clear/i);
+});
+
+test('rebooking_options flags that it could not verify the route', async () => {
+  const { json } = await post('/tools/rebooking_options', { destination: 'Beirut' });
+  if (json.status === 'degraded') return;
+  assert.strictEqual(json.route_check_verified, false);
+  assert.match(json.advice, /could not reach the live advisory/i);
+});

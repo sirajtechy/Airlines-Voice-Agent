@@ -45,6 +45,32 @@ function safe(name, handler) {
   };
 }
 
+/**
+ * The advisory could not be read, so we know nothing — say so.
+ *
+ * Without this the parsers answer "no restriction found for X" on empty input,
+ * which every caller above then reports as `blocked: false` /
+ * `transit_allowed: true`. That is an all-clear issued from zero data, and it
+ * is the single most dangerous output this system can produce: it puts a
+ * passenger on a plane she will be turned back from. Observed in production
+ * the moment the context.dev key hit its credit limit, with no cache to fall
+ * back on after a dyno restart.
+ *
+ * The agent prompt already forbids inventing an all-clear. This closes the same
+ * hole one layer down, where the prompt cannot reach.
+ */
+function unverified(res, what, extra = {}) {
+  return res.status(200).json({
+    status: 'degraded',
+    verified: false,
+    message:
+      `I could not reach the live travel advisory just now, so I cannot confirm ${what}. ` +
+      'Please check with Emirates before you travel — do not treat this as an all-clear.',
+    source: 'none',
+    ...extra,
+  });
+}
+
 /** Normalise a spoken airport/city into an IATA code where we can. */
 function toIata(input) {
   const raw = String(input || '').trim();
@@ -253,7 +279,10 @@ router.post(
 
     // Cross-check the advisory: a suspended route makes these options moot.
     const scraped = await ctx.scrape(EMIRATES_UPDATES);
-    const disruption = destInput
+    // No advisory means we cannot vouch for the route; say so beside the seats
+    // rather than implying the cross-check passed.
+    const advisoryReadable = Boolean(scraped.data);
+    const disruption = destInput && advisoryReadable
       ? advisory.parseDisruption(scraped.data, destInput)
       : { blocked: false };
 
@@ -261,9 +290,12 @@ router.post(
       destination: destInput || null,
       route_blocked: Boolean(disruption.blocked),
       options,
+      route_check_verified: advisoryReadable,
       advice: disruption.blocked
         ? `Travel to ${destInput} is currently restricted, so a same-airline rebooking may not be possible yet. ${disruption.advisory_text}`
-        : 'Seats shown are the next available services. The transfer desk can hold one for you while you decide.',
+        : advisoryReadable
+          ? 'Seats shown are the next available services. The transfer desk can hold one for you while you decide.'
+          : 'These are the next scheduled services, but I could not reach the live advisory to confirm the route is open — check with Emirates before booking.',
       source: scraped.source,
     });
   })
@@ -317,6 +349,7 @@ router.post(
     }
 
     const scraped = await ctx.scrape(EMIRATES_UPDATES);
+    if (!scraped.data) return unverified(res, `whether travel to ${destination} is affected`, { destination });
     const parsed = advisory.parseDisruption(scraped.data, destination);
 
     res.status(200).json({
@@ -349,6 +382,12 @@ router.post(
     }
 
     const scraped = await ctx.scrape(EMIRATES_UPDATES);
+    if (!scraped.data) {
+      return unverified(res, `whether you can transit Dubai to ${finalDestination}`, {
+        transit_allowed: null,
+        conditional: null,
+      });
+    }
     const parsed = advisory.parseTransitRules(scraped.data, origin || 'your origin', finalDestination);
 
     res.status(200).json({
@@ -393,6 +432,7 @@ router.post(
     }
 
     const scraped = await ctx.scrape(EMIRATES_UPDATES);
+    if (!scraped.data) return unverified(res, `the entry requirements for ${destination}`, { destination });
     const parsed = advisory.parseEntryRequirements(scraped.data, destination);
 
     // The airline advisory only covers the EU and the UK. For anywhere else,
@@ -591,6 +631,30 @@ router.post(
     const page = val(advisoryPage);
     const p = val(position);
     const w = val(weather);
+
+    // Same rule as the individual tools: an unreadable advisory is not good news.
+    if (!page || !page.data) {
+      return res.status(200).json({
+        pnr: booking.pnr,
+        passenger: booking.passenger,
+        journey: `${booking.origin_city} to ${booking.final_destination_city}${connecting ? ' via Dubai' : ''}`,
+        segments: booking.segments,
+        clear_to_travel: null,
+        verified: false,
+        headline:
+          'I could not reach the live travel advisory just now, so I cannot tell you whether your journey is clear.',
+        next_action:
+          'Please confirm with Emirates before you set off — do not treat this as an all-clear.',
+        advisory_changed_recently: false,
+        advisory_change_note: null,
+        checks: [
+          p && { check: 'aircraft_position', ok: true, detail: adsb.speakablePosition(p), source: p.source },
+          w && { check: 'hub_weather', ok: true, detail: w.data ? w.data.split('\n')[0].trim() : null, source: w.source },
+        ].filter(Boolean),
+        booking_source: 'demo_booking',
+        source: 'none',
+      });
+    }
 
     const t = page && {
       parsed: advisory.parseTransitRules(page.data, booking.origin_city, booking.final_destination_city),
