@@ -32,6 +32,7 @@ CANVAS = RGBColor(0xF7, 0xF7, 0xF8)
 FONT = 'Helvetica Neue'
 
 LOGO = 'docs/assets/raahi-symbol.png'
+HERO = 'docs/assets/raahi-hero.jpg'
 QR = 'docs/assets/raahi-qr.png'
 ARCH = 'docs/assets/architecture-stack.png'
 SEQ = 'docs/assets/demo-call-sequence.png'
@@ -51,6 +52,32 @@ def slide(bg=CANVAS):
     bgshape.line.fill.background()
     bgshape.shadow.inherit = False
     return s
+
+
+def full_bleed(s, img=HERO):
+    """Cover the slide with artwork, cropping to 16:9 rather than distorting."""
+    try:
+        s.shapes.add_picture(img, 0, 0, width=SW, height=SH)
+        return True
+    except Exception:
+        return False
+
+
+def scrim(s, x, y, w, h, color=RGBColor(0x10, 0x10, 0x12), alpha=62000):
+    """Translucent panel so text stays legible over photography."""
+    from pptx.oxml.ns import qn
+    import copy
+    box = s.shapes.add_shape(1, x, y, w, h)
+    box.fill.solid()
+    box.fill.fore_color.rgb = color
+    box.line.fill.background()
+    box.shadow.inherit = False
+    # python-pptx has no alpha API; inject it into the solidFill directly.
+    solid = box.fill._xPr.find(qn('a:solidFill'))
+    clr = solid.find(qn('a:srgbClr'))
+    a = clr.makeelement(qn('a:alpha'), {'val': str(alpha)})
+    clr.append(a)
+    return box
 
 
 def band(s, y=0, h=Inches(0.10), color=RED):
@@ -120,23 +147,27 @@ def notes(s, txt):
 
 # ─────────────────────────────────────────────────────────── 1 · Title
 s = slide(WHITE)
-band(s, h=Inches(0.14))
-band(s, y=Inches(0.14), h=Pt(3), color=GOLD)
+has_hero = full_bleed(s)
+if has_hero:
+    # Left-hand scrim: the artwork's subject sits right of centre, so the copy
+    # goes left where the frame is quietest.
+    scrim(s, 0, 0, Inches(6.9), SH, alpha=72000)
 try:
-    s.shapes.add_picture(LOGO, Inches(5.72), Inches(1.55), height=Inches(1.35))
+    s.shapes.add_picture(LOGO, Inches(0.85), Inches(1.45), height=Inches(0.95))
 except Exception:
     pass
-text(s, 'RAAHI', Inches(0.8), Inches(3.05), Inches(11.7), Inches(1.0),
-     size=62, color=RED, bold=True, align=PP_ALIGN.CENTER)
-text(s, 'Y O U R   W A Y   F O R W A R D', Inches(0.8), Inches(4.05), Inches(11.7), Inches(0.4),
-     size=13, color=SOFT, align=PP_ALIGN.CENTER)
-text(s, 'A voice copilot that reads the page airlines actually publish —\nand tells a stranded passenger what to do next.',
-     Inches(1.6), Inches(4.75), Inches(10.1), Inches(1.0),
-     size=19, color=INK, align=PP_ALIGN.CENTER, line=1.35)
-text(s, 'Siraj  ·  Astha  ·  Farman        BUiD Voice Agents Hackathon, Dubai  ·  8 August 2026',
-     Inches(0.8), Inches(6.5), Inches(11.7), Inches(0.4),
-     size=12, color=SOFT, align=PP_ALIGN.CENTER)
-notes(s, "Hold 3 seconds. Don't read the slide. Go straight to the problem.")
+text(s, 'RAAHI', Inches(0.85), Inches(2.6), Inches(6.0), Inches(1.1),
+     size=64, color=WHITE if has_hero else RED, bold=True)
+text(s, 'Y O U R   W A Y   F O R W A R D', Inches(0.9), Inches(3.72), Inches(6.0), Inches(0.4),
+     size=13, color=GOLD)
+text(s, 'A voice copilot that reads the page airlines\nactually publish — and tells a stranded\npassenger what to do next.',
+     Inches(0.85), Inches(4.3), Inches(5.9), Inches(1.4),
+     size=19, color=WHITE if has_hero else INK, line=1.4)
+text(s, 'Siraj  ·  Astha  ·  Farman\nBUiD Voice Agents Hackathon, Dubai  ·  8 August 2026',
+     Inches(0.85), Inches(6.05), Inches(6.0), Inches(0.8),
+     size=12, color=RGBColor(0xC9, 0xCC, 0xD2) if has_hero else SOFT, line=1.35)
+band(s, y=SH - Inches(0.09), h=Inches(0.09))
+notes(s, "Hold 3 seconds on the artwork. Don't read the slide. Go straight to the problem.")
 
 # ─────────────────────────────────────────────────────────── 2 · Problem
 s = slide()
@@ -269,7 +300,21 @@ bullets(s, [
 ], y=Inches(2.2), size=16, gap=2.1)
 notes(s, "Optional but strong. Shows we tested adversarially rather than demoed happy paths.")
 
-# ─────────────────────────────────────────────────────────── 11 · Try it
+# ─────────────────────────────────────────────── 11 · Vision (photographic)
+s = slide(WHITE)
+has_hero = full_bleed(s)
+if has_hero:
+    scrim(s, 0, Inches(4.42), SW, Inches(3.08), alpha=78000)
+text(s, 'One question. Every layer. Two seconds.',
+     Inches(0.85), Inches(4.72), Inches(11.6), Inches(0.7),
+     size=34, color=WHITE if has_hero else INK, bold=True)
+text(s, 'Voice · live advisory prose · entry rules · real aircraft · change detection — resolved into one\nsentence a passenger can act on, in the language they are frightened in.',
+     Inches(0.85), Inches(5.5), Inches(11.6), Inches(1.1),
+     size=17, color=RGBColor(0xDC, 0xDF, 0xE4) if has_hero else SOFT, line=1.4)
+band(s, y=SH - Inches(0.09), h=Inches(0.09))
+notes(s, "Use as the emotional beat before the call to action, or as the closing hold.")
+
+# ─────────────────────────────────────────────────────────── 12 · Try it
 s = slide(WHITE)
 band(s, h=Inches(0.14))
 band(s, y=Inches(0.14), h=Pt(3), color=GOLD)
@@ -288,4 +333,4 @@ text(s, 'Try: “My booking reference is K seven X two M nine.”     github.com
 notes(s, "End here. Leave it on screen while you close.")
 
 prs.save('docs/RAAHI-loom-deck.pptx')
-print(f'docs/RAAHI-loom-deck.pptx — {len(prs.slides.__iter__.__self__._sldIdLst)} slides')
+print(f'docs/RAAHI-loom-deck.pptx — {len(prs.slides._sldIdLst)} slides')

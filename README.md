@@ -448,7 +448,7 @@ TECH-SPEC.md               Engineering reasoning and honest limits
 docs/architecture.md       Layer walkthrough + sequence diagram
 docs/question-bank.md      Every question RAAHI answers + guardrail test results
 docs/demo-script.md        The demo run sheet
-docs/RAAHI-loom-deck.pptx  11-slide deck (generated)
+docs/RAAHI-loom-deck.pptx  12-slide demo deck (generated)
 docs/assets/               Logo, QR, rendered diagrams (PNG + SVG)
 ```
 
